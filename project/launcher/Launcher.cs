@@ -47,8 +47,10 @@ namespace TableTennisLauncher
         private TextBox txtIsoPath;
         private TextBlock txtIsoStatus;
         private RadioButton rb720, rb1080, rb1440, rb4k, rbUltra;
-        private CheckBox chkFullscreen, chkShowFps;
+        private CheckBox chkFullscreen, chkShowFps, chkTearing, chkMatchOnly;
         private ComboBox comboFps, comboUltra;
+        // Framerate values matching the comboFps items; 0 = unlocked.
+        private static readonly int[] FpsValues = { 60, 120, 144, 240, 0 };
         private ComboBox comboAA, comboPost;
         private TextBlock txtStatus;
 
@@ -201,11 +203,11 @@ namespace TableTennisLauncher
 
             var lblFps = new TextBlock { Text = "Framerate Limit (FPS):", Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
             comboFps = new ComboBox { Height = 26, VerticalAlignment = VerticalAlignment.Center };
-            comboFps.Items.Add("60 FPS (recommended)");
-            comboFps.Items.Add("120 requested / paced at 60");
-            comboFps.Items.Add("144 requested / paced at 60");
-            comboFps.Items.Add("240 requested / paced at 60");
-            comboFps.Items.Add("No cap requested / paced at 60");
+            comboFps.Items.Add("60 FPS (Recommended - correct game speed)");
+            comboFps.Items.Add("120 FPS (experimental)");
+            comboFps.Items.Add("144 FPS (experimental)");
+            comboFps.Items.Add("240 FPS (experimental)");
+            comboFps.Items.Add("Unlocked (experimental)");
             comboFps.SelectedIndex = 0;
 
             Grid.SetRow(lblFps, 0); Grid.SetColumn(lblFps, 0);
@@ -216,13 +218,33 @@ namespace TableTennisLauncher
 
             var lblFpsHint = new TextBlock
             {
-                Text = "All selections currently run at 60 FPS to preserve game speed. F10 opens a separate timing window with a graph. Submission and Present-call timing do not measure GPU render duration or physical display scanout.",
+                Text = "60 FPS is the original timing. Above 60, game time follows the measured frame time (experimental: gameplay timing may differ from the original). With G-Sync / FreeSync, 60 FPS is displayed evenly at any refresh rate. Without it, a 120 Hz refresh (an exact multiple of 60) gives the smoothest motion.",
                 Foreground = new SolidColorBrush(Color.FromRgb(170, 175, 190)),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10)
             };
             contentPanel.Children.Add(lblFpsHint);
+
+            chkTearing = new CheckBox
+            {
+                Content = "Allow tearing (recommended; required for a steady 60 FPS, smooth with G-Sync / FreeSync)",
+                Foreground = Brushes.White,
+                FontSize = 13,
+                Margin = new Thickness(4, 0, 0, 10),
+                IsChecked = true
+            };
+            contentPanel.Children.Add(chkTearing);
+
+            chkMatchOnly = new CheckBox
+            {
+                Content = "Above 60 FPS: high frame rate in matches only (experimental - menus, loading, videos and the pause menu stay at 60)",
+                Foreground = Brushes.White,
+                FontSize = 13,
+                Margin = new Thickness(4, 0, 0, 10),
+                IsChecked = false
+            };
+            contentPanel.Children.Add(chkMatchOnly);
 
             // Section: Window Mode
             var secMode = CreateSectionTitle("WINDOW MODE");
@@ -950,6 +972,8 @@ namespace TableTennisLauncher
             string iso = "";
             string res = "1080p";
             int framerate = 60;
+            bool allowTearing = true;
+            bool matchOnly = false;
             bool fullscreen = true;
             bool showFps = false;
             string aa = "fxaa";
@@ -974,6 +998,8 @@ namespace TableTennisLauncher
                         else if (key.Equals("iso_path", StringComparison.OrdinalIgnoreCase)) iso = val;
                         else if (key.Equals("resolution", StringComparison.OrdinalIgnoreCase)) res = val;
                         else if (key.Equals("framerate", StringComparison.OrdinalIgnoreCase)) int.TryParse(val, out framerate);
+                        else if (key.Equals("allow_tearing", StringComparison.OrdinalIgnoreCase)) bool.TryParse(val, out allowTearing);
+                        else if (key.Equals("high_fps_match_only", StringComparison.OrdinalIgnoreCase)) bool.TryParse(val, out matchOnly);
                         else if (key.Equals("fullscreen", StringComparison.OrdinalIgnoreCase)) bool.TryParse(val, out fullscreen);
                         else if (key.Equals("show_fps", StringComparison.OrdinalIgnoreCase)) bool.TryParse(val, out showFps);
                         else if (key.Equals("aa", StringComparison.OrdinalIgnoreCase)) aa = val;
@@ -1018,11 +1044,9 @@ namespace TableTennisLauncher
             }
             else rb1080.IsChecked = true;
 
-            if (framerate == 60) comboFps.SelectedIndex = 0;
-            else if (framerate == 120) comboFps.SelectedIndex = 1;
-            else if (framerate == 144) comboFps.SelectedIndex = 2;
-            else if (framerate == 0) comboFps.SelectedIndex = 4;
-            else comboFps.SelectedIndex = 3; // 240 FPS
+            comboFps.SelectedIndex = Math.Max(0, Array.IndexOf(FpsValues, framerate));
+            chkTearing.IsChecked = allowTearing;
+            chkMatchOnly.IsChecked = matchOnly;
 
             comboButtons.SelectedIndex = buttons == "xbox" ? 1 : buttons == "playstation" ? 2 : 0;
             txtServer.Text = server; txtPlayer.Text = player; txtRoom.Text = room;
@@ -1050,12 +1074,8 @@ namespace TableTennisLauncher
             else if (rb4k.IsChecked == true) res = "4k";
             else if (rbUltra.IsChecked == true) res = comboUltra.SelectedIndex == 0 ? "2560x1080" : comboUltra.SelectedIndex == 1 ? "3440x1440" : "3840x1600";
 
-            int targetFps = 240;
-            if (comboFps.SelectedIndex == 0) targetFps = 60;
-            else if (comboFps.SelectedIndex == 1) targetFps = 120;
-            else if (comboFps.SelectedIndex == 2) targetFps = 144;
-            else if (comboFps.SelectedIndex == 3) targetFps = 240;
-            else if (comboFps.SelectedIndex == 4) targetFps = 0;
+            int targetFps = FpsValues[Math.Max(0, comboFps.SelectedIndex)];
+            bool allowTearing = chkTearing.IsChecked == true;
 
             bool fullscreen = chkFullscreen.IsChecked == true;
             bool showFps = chkShowFps.IsChecked == true;
@@ -1075,6 +1095,8 @@ namespace TableTennisLauncher
                     "iso_path=" + iso,
                     "resolution=" + res,
                     "framerate=" + targetFps,
+                    "allow_tearing=" + allowTearing.ToString().ToLower(),
+                    "high_fps_match_only=" + (chkMatchOnly.IsChecked == true).ToString().ToLower(),
                     "fullscreen=" + fullscreen.ToString().ToLower(),
                     "show_fps=" + showFps.ToString().ToLower(),
                     "aa=" + aa,
@@ -1170,12 +1192,8 @@ namespace TableTennisLauncher
                 resScale = comboUltra.SelectedIndex == 0 ? 2 : 3;
             }
 
-            int targetFps = 240;
-            if (comboFps.SelectedIndex == 0) targetFps = 60;
-            else if (comboFps.SelectedIndex == 1) targetFps = 120;
-            else if (comboFps.SelectedIndex == 2) targetFps = 144;
-            else if (comboFps.SelectedIndex == 3) targetFps = 240;
-            else if (comboFps.SelectedIndex == 4) targetFps = 0;
+            int targetFps = FpsValues[Math.Max(0, comboFps.SelectedIndex)];
+            bool allowTearing = chkTearing.IsChecked == true;
 
             bool isFullscreen = chkFullscreen.IsChecked == true;
             bool showFps = chkShowFps.IsChecked == true;
@@ -1196,8 +1214,9 @@ namespace TableTennisLauncher
             }
 
             string args = string.Format(
-                "--game_data_root=\"{0}\" --resolution_scale={1} --draw_resolution_scale_x={1} --draw_resolution_scale_y={1} --window_width={2} --window_height={3} --fullscreen={4} --swap_post_effect={5} --present_effect={6} --show_fps={7} --framerate={8} --protect_zero=false --gpu_allow_invalid_fetch_constants=true",
-                selectedIso, resScale, width, height, isFullscreen.ToString().ToLower(), aa, post, showFps.ToString().ToLower(), targetFps);
+                "--game_data_root=\"{0}\" --resolution_scale={1} --draw_resolution_scale_x={1} --draw_resolution_scale_y={1} --window_width={2} --window_height={3} --fullscreen={4} --swap_post_effect={5} --present_effect={6} --show_fps={7} --framerate={8} --allow_tearing={9} --high_fps_match_only={10} --protect_zero=false --gpu_allow_invalid_fetch_constants=true",
+                selectedIso, resScale, width, height, isFullscreen.ToString().ToLower(), aa, post, showFps.ToString().ToLower(), targetFps, allowTearing.ToString().ToLower(),
+                (chkMatchOnly.IsChecked == true).ToString().ToLower());
 
             args += " --button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto");
             if (HasCommunityEngine) {

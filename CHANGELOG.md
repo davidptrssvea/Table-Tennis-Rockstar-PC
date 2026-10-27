@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased - experimental high refresh
+
+- The 120/144/240/no-cap options now really run above 60. The game normally adds
+  1/60 s of game time per frame, so above 60 the timer step follows the measured
+  frame time to keep the game at normal speed. 60 FPS is unchanged.
+- New launcher option to use the high frame rate in matches only. Menus, loading,
+  videos and the pause menu stay at 60 with the original timer step.
+- The pause menu and help tips work normally at high frame rates.
+- If the driver caps the frame rate or forces V-Sync, the game follows it instead
+  of fighting it.
+
 ## v1.5.0 - 2026-11-04 - the community update
 
 - Compare release version and exact engine bytes for friend invitations, allowing

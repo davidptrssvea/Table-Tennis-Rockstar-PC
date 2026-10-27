@@ -358,7 +358,7 @@ retail archives are not part of the source allowlist.
 4. Extract only default.xex and assets/resource/flash/flash.rpf into ignored local
    folders. Check the original archive/movie hashes before applying menu changes.
 5. Generate C++ from the user's XEX with the supported SDK and function metadata.
-6. Apply 18 verified native edit rules (17 functions plus the SDK-derived PCH).
+6. Apply 21 verified native edit rules (20 functions plus the SDK-derived PCH).
    Rules contain hashes, positions and replacement text, not original bodies.
    Each rule recognizes both supported clean and patched output.
 7. Configure and compile the local game. Compile the project-authored launcher,

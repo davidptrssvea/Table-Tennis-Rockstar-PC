@@ -24,6 +24,7 @@
 
 REXCVAR_DECLARE(bool, show_fps);
 REXCVAR_DECLARE(bool, achievement_sound);
+REXCVAR_DECLARE(int32_t, framerate);
 namespace tabletennis::pc_settings {
 namespace {
 std::atomic<bool> open{false};
@@ -136,7 +137,7 @@ struct SettingsPage::State {
     {"fullscreen","FULLSCREEN","Switch between a window and fullscreen immediately.",{"false","true"},{"OFF","ON"}},
     {"aa","ANTI-ALIASING","Smooth jagged edges. Applies after restarting the game.",{"none","fxaa","fxaa_extreme"},{"OFF","FXAA","FXAA EXTREME"},1,true},
     {"post","SHARPENING / SCALING","Choose the output filter. Applies after restarting the game.",{"bilinear","cas","fsr"},{"BILINEAR","CAS","FSR"},2,true},
-    {"show_fps","FPS / FRAME TIMES","Open the separate F10 timing window. Gameplay stays paced at 60 FPS.",{"false","true"},{"OFF","ON"}},
+    {"show_fps","FPS / FRAME TIMES","Open the separate F10 timing window with frame times and a graph.",{"false","true"},{"OFF","ON"}},
     {"button_prompts","BUTTON ICONS","AUTO follows the controller in use. Changes apply immediately.",{"auto","xbox","playstation"},{"AUTO","XBOX","PLAYSTATION"}},
     {"achievement_sound","ACHIEVEMENT SOUND","Play a sound when an achievement unlocks.",{"false","true"},{"OFF","ON"},1},
     {"updates","UPDATES","Check signed releases. Installation only starts after you approve it in the updater.",{""},{"CHECK NOW"}}
@@ -236,7 +237,10 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   }
   dl->PushClipRect({x+20*s,y+414*s},{r-20*s,y+484*s},true);
   text(19*s,x+28*s,y+416*s,IM_COL32(220,220,220,255),state_->rows[state_->row].help,false);
-  text(18*s,x+28*s,y+449*s,IM_COL32(190,190,190,255),"* AFTER RESTART     |     FRAME PACING: 60 FPS",false);
+  const int32_t fps=REXCVAR_GET(framerate);
+  const std::string footer="* AFTER RESTART     |     FRAME PACING: "+
+      (fps<=0?std::string("UNLOCKED"):std::to_string(fps)+" FPS");
+  text(18*s,x+28*s,y+449*s,IM_COL32(190,190,190,255),footer.c_str(),false);
   dl->PopClipRect();
   dl->AddRectFilled({x,y+495*s},{r,y+543*s},IM_COL32(205,208,210,255));
   const auto ink=IM_COL32(20,22,25,255);

@@ -5,6 +5,7 @@
 #include "button_prompts.h"
 #include "system_link.h"
 #include "photo_mode.h"
+#include "frame_pacer.h"
 
 #include <SDL3/SDL.h>
 #include <array>
@@ -221,6 +222,7 @@ void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) 
     }
   }
   const uint16_t buttons = REX_LOAD_U16(state + 4);
+  tabletennis::pacing::OnControllerButtons(user, buttons, base);
   const bool pressed = buttons || REX_LOAD_U8(state + 6) > 30 ||
                        REX_LOAD_U8(state + 7) > 30;
   if (phase.load() == Phase::Watching && pressed) {
