@@ -6,6 +6,7 @@
 #include <rex/filesystem.h>
 #include "offline_menu_device.h"
 #include "intro_skip.h"
+#include "frame_pacing.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -33,9 +34,12 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
   explicit FpsOverlayDialog(rex::ui::ImGuiDrawer* drawer, ImFont* loading_font)
       : rex::ui::ImGuiDialog(drawer), loading_font_(loading_font) {}
 
-  void SetVisible(bool visible) { visible_ = visible; }
+  void Attach() {
+    if (!attached_) { imgui_drawer()->AddDialog(this); attached_ = true; }
+  }
+  void SetVisible(bool visible) { visible_ = visible; if (visible) Attach(); }
   bool IsVisible() const { return visible_; }
-  void Toggle() { visible_ = !visible_; }
+  void Toggle() { SetVisible(!visible_); }
 
  protected:
   void OnDraw(ImGuiIO& io) override {
@@ -57,34 +61,15 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
                           viewport->Pos.y + (viewport->Size.y - size.y) * 0.5f),
                     IM_COL32(255, 255, 255, 255), message);
     }
-    // Pace presentation thread to target framerate limit
-    int32_t target_fps = REXCVAR_GET(framerate);
-    if (target_fps > 0) {
-      using clock = std::chrono::steady_clock;
-      static auto last_draw = clock::now();
-      const auto target_dur = std::chrono::nanoseconds(1'000'000'000LL / target_fps);
-      auto now = clock::now();
-      auto elapsed = now - last_draw;
-      if (elapsed < target_dur) {
-        auto sleep_dur = target_dur - elapsed;
-        if (sleep_dur > std::chrono::milliseconds(2)) {
-          std::this_thread::sleep_for(sleep_dur - std::chrono::milliseconds(1));
-        }
-        while (clock::now() - last_draw < target_dur) {
-#if defined(_M_X64) || defined(__x86_64__)
-          _mm_pause();
-#endif
-        }
-      }
-      last_draw = clock::now();
-    }
-
-    static int perf_log_counter = 0;
-    if (++perf_log_counter % 120 == 0) {
-      REXLOG_INFO("PERF TICK: Current FPS: {:.1f} ({:.2f} ms)", io.Framerate, (io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f));
-    }
-
     if (!visible_) {
+      // Leave the SDK's immediate guest-output presentation path available
+      // during play. A hidden always-attached dialog otherwise keeps painting
+      // duplicated guest images at the independent UI refresh rate.
+      if (!tabletennis::intro::NeedsStartupPolling() && attached_) {
+        imgui_drawer()->RemoveDialog(this);
+        attached_ = false;
+        REXLOG_INFO("Tabletennis: Hidden FPS/startup overlay detached; guest-output presentation released");
+      }
       return;
     }
 
@@ -105,17 +90,18 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.42f, 0.70f, 0.60f));
 
     if (ImGui::Begin("##FpsOverlay", nullptr, flags)) {
-      float fps = io.Framerate;
-      float ms = (fps > 0.0f) ? (1000.0f / fps) : 0.0f;
+      const auto stats = tabletennis::frames::submissions.Read(tabletennis::frames::Clock::now());
+      float fps = static_cast<float>(stats.fps);
 
       ImVec4 color = (fps >= 115.0f) ? ImVec4(0.0f, 0.9f, 1.0f, 1.0f) :   // Cyan for 120Hz/144Hz/240Hz
                      (fps >= 55.0f)  ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) :   // Green for 60Hz
                      (fps >= 30.0f)  ? ImVec4(1.0f, 0.85f, 0.2f, 1.0f) :  // Yellow
                                        ImVec4(1.0f, 0.3f, 0.3f, 1.0f);    // Red
 
-      ImGui::TextColored(color, "FPS: %.1f", fps);
-      ImGui::SameLine();
-      ImGui::TextDisabled("(%.2f ms)", ms);
+      ImGui::TextColored(color, "Game submissions: %.1f FPS", fps);
+      ImGui::TextDisabled("Mean %.2f ms | p95 %.2f ms | max %.2f ms",
+                         stats.mean_ms, stats.p95_ms, stats.max_ms);
+      ImGui::TextDisabled("UI redraws: %.1f FPS (not game FPS)", io.Framerate);
     }
     ImGui::End();
 
@@ -126,6 +112,7 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
  private:
   ImFont* loading_font_ = nullptr;
   bool visible_ = false;
+  bool attached_ = false;
 };
 
 class TabletennisApp : public rex::ReXApp {
@@ -179,7 +166,7 @@ class TabletennisApp : public rex::ReXApp {
           std::string val = line.substr(10);
           try {
             int target = std::stoi(val);
-            if (target >= 0) {
+            if (target >= 0 && rex::cvar::GetFlagSource("framerate") < rex::cvar::Source::kCommandLine) {
               REXCVAR_SET(framerate, target);
               REXLOG_INFO("TabletennisApp: Target framerate from settings.ini: {} FPS", target);
             }
@@ -232,9 +219,9 @@ class TabletennisApp : public rex::ReXApp {
       config.gpu_plugin = "xenos";
     }
 
-    // Always keep guest video mode refresh rate at 60.0 Hz.
-    // This ensures guest VBlank interrupts fire at 60Hz so video player,
-    // audio clocks, and menu background matches run at normal 1.0x real-time speed.
+    // Report the original video mode to preserve the game's timing assumptions.
+    // SDK v0.10.0 uses a 1kHz VBlank worker when vsync=false, independently
+    // of this mode value. A higher cap does not unlock game motion by itself.
     rex::cvar::SetFlagByName("video_mode_refresh_rate", "60.0");
 
     int32_t target_hz = REXCVAR_GET(framerate);
@@ -242,7 +229,7 @@ class TabletennisApp : public rex::ReXApp {
       // High refresh rate / uncapped presentation via D3D12 tearing
       rex::cvar::SetFlagByName("vsync", "false");
       rex::cvar::SetFlagByName("d3d12_allow_variable_refresh_rate_and_tearing", "true");
-      REXLOG_INFO("TabletennisApp::OnPreSetup - High Framerate Mode: target {} FPS (vsync=false, guest_vblank=60Hz)", target_hz);
+      REXLOG_INFO("TabletennisApp::OnPreSetup - Experimental submission cap {} (vsync=false, reported_mode=60Hz, SDK no-vsync VBlank=1000Hz); game motion is not unlocked", target_hz);
     } else {
       rex::cvar::SetFlagByName("vsync", "true");
       REXLOG_INFO("TabletennisApp::OnPreSetup - Standard 60 Hz VSync enabled");
@@ -308,7 +295,7 @@ class TabletennisApp : public rex::ReXApp {
       fps_overlay_ = std::make_unique<FpsOverlayDialog>(drawer, loading_font_);
       bool initial_visible = REXCVAR_GET(show_fps);
       fps_overlay_->SetVisible(initial_visible);
-      drawer->AddDialog(fps_overlay_.get());
+      fps_overlay_->Attach();
       REXLOG_INFO("TabletennisApp: FPS overlay created (initial state: {})", initial_visible ? "ON" : "OFF");
     }
 

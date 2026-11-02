@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.6 — 2026-11-02
+
+- Removed the custom sleep/spin limiter from the UI draw callback. It could delay new game output independently of the guest frame producer.
+- Hidden FPS/startup overlay now detaches after startup, restoring the SDK's immediate guest-output presentation path. F10 reattaches it when requested.
+- Replaced the after-swap relative sleep with one producer-side deadline limiter; small sleep overshoot no longer shifts every later deadline, and long stalls do not trigger catch-up bursts.
+- F10 and logs now measure guest VdSwap submissions and mean/p95/max intervals. UI redraw FPS is labeled separately. These are submission timings, not GPU render timings or a guaranteed unique-frame count.
+- Default to 60 FPS/VSync in the launcher. Existing higher caps are retained as explicitly experimental; they do not unlock the game's roughly 60 FPS motion. Removed unsupported performance recommendations and high-FPS claims.
+- Explicit command-line framerate now takes precedence over saved settings.
+- Added deterministic native checks for pacing deadlines, stalls, cap changes, stale statistics and interval measurements.
+
+This addresses misleading metrics and avoidable presentation delays. It is **not** a verified fix for genuine 120/144 FPS gameplay or every user's stutter report; issue #8 remains open for validation.
+
 ## v1.0.5 — 2026-10-19
 
 - Added a transparent Windows desktop icon at 16, 24, 32, 48, 64, 128 and 256 pixels.

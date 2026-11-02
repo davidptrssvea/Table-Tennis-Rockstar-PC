@@ -2,6 +2,7 @@
 
 #include "generated/default/tabletennis_init.h"
 #include <rex/cvar.h>
+#include "frame_pacing.h"
 #include <chrono>
 #include <thread>
 #if defined(_M_X64) || defined(__x86_64__)
@@ -17,30 +18,20 @@ REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 1
 extern "C" REX_FUNC(__imp__VdSwap);
 
 extern "C" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base) {
-  // Call original VdSwap to commit guest frame to GPU
+  tabletennis::frames::BeforeSubmit(REXCVAR_GET(framerate));
+  // Count guest submissions, never ImGui redraws or duplicate host presents.
   __imp__VdSwap(ctx, base);
-
-  // High-precision frame limiter for high refresh rate modes
-  int32_t target_fps = REXCVAR_GET(framerate);
-  if (target_fps > 0) {
-    using clock = std::chrono::steady_clock;
-    static auto last_swap = clock::now();
-    const auto target_duration = std::chrono::nanoseconds(1'000'000'000LL / target_fps);
-
-    auto now = clock::now();
-    auto elapsed = now - last_swap;
-    if (elapsed < target_duration) {
-      auto sleep_dur = target_duration - elapsed;
-      if (sleep_dur > std::chrono::milliseconds(2)) {
-        std::this_thread::sleep_for(sleep_dur - std::chrono::milliseconds(1));
-      }
-      while (clock::now() - last_swap < target_duration) {
-#if defined(_M_X64) || defined(__x86_64__)
-        _mm_pause();
-#endif
-      }
-    }
-    last_swap = clock::now();
+  const auto now = tabletennis::frames::Clock::now();
+  tabletennis::frames::submissions.Record(now);
+  static std::mutex log_mutex;
+  std::unique_lock log_lock(log_mutex, std::try_to_lock);
+  if (!log_lock.owns_lock()) return;
+  static auto next_log = now + std::chrono::seconds(2);
+  if (now >= next_log) {
+    next_log = now + std::chrono::seconds(2);
+    const auto stats = tabletennis::frames::submissions.Read(now);
+    REXLOG_INFO("Game submissions: {:.1f} FPS, mean {:.2f} ms, p95 {:.2f} ms, max {:.2f} ms ({} intervals)",
+                stats.fps, stats.mean_ms, stats.p95_ms, stats.max_ms, stats.intervals);
   }
 }
 

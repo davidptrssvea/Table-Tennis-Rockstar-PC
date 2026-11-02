@@ -139,6 +139,8 @@ class RuntimeIsoTests(unittest.TestCase):
                 args = [str(target / 'tabletennis.exe'), '--fullscreen=false']
                 if source == 'argument':
                     args.append('--game_data_root=' + str(iso))
+                    # Explicit selection must win over settings.ini's 60 cap.
+                    args.append('--framerate=144')
                 process = subprocess.Popen(args, cwd=target.parent,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
@@ -154,11 +156,27 @@ class RuntimeIsoTests(unittest.TestCase):
                     self.assertIn('Runtime and VFS fully initialized', log, log[-6000:])
                     self.assertNotIn('--game_data_root does not exist', log)
                     self.assertIn('TabletennisOfflineMenu', log, log[-6000:])
+                    if source == 'argument':
+                        self.assertIn('Experimental submission cap 144', log)
                     self.assertIsNone(process.poll(), 'Game exited during ISO startup')
                 finally:
                     if process.poll() is None:
                         process.terminate()
                     process.wait(timeout=10)
+
+
+@unittest.skipUnless(sys.platform == 'win32' and os.environ.get('TABLETENNIS_TEST_NATIVE'),
+                     'Opt-in native pacing test needs the compiler environment')
+class NativePacingTests(unittest.TestCase):
+    def test_deadlines_and_submission_statistics(self):
+        root = Path(__file__).resolve().parents[1]
+        _, _, clang, _, env = setup_build.build_tools()
+        with tempfile.TemporaryDirectory(prefix='Table Tennis pacing ') as directory:
+            executable = Path(directory) / 'pacing.exe'
+            subprocess.run([str(clang), '-std=c++23', '-UNDEBUG',
+                            '-I' + str(root / 'project/src'), str(root / 'tests/frame_pacing_test.cpp'),
+                            '-o', str(executable)], check=True, env=env)
+            subprocess.run([str(executable)], check=True, timeout=10)
 
 
 if __name__ == '__main__':

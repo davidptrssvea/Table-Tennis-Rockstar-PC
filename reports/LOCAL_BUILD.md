@@ -67,6 +67,49 @@ editing the user's installed SDK.
 
 ## Verification
 
+### v1.0.6 submission timing and presentation
+
+Issue #8 reports rough motion despite an approximately 141 FPS F10 reading. The
+old reading was ImGui's redraw rate, and the old UI callback slept/spun for a
+second frame limit independently of the producer-side VdSwap limit. A permanently
+attached but hidden startup/FPS dialog also retained ownership of presentation
+on the UI thread. SDK v0.10.0 can present directly from guest output when no UI
+drawers are attached; the project now releases that path after startup when F10
+is hidden. The new limiter waits before VdSwap on fixed deadlines, never inside
+the UI draw callback. It skips missed deadlines instead of bursting after stalls.
+
+The prior explanation that VBlank always stayed at 60 Hz was incorrect: although
+the reported video mode is 60 Hz, the SDK graphics worker uses 1000 Hz when
+`vsync=false`. This was checked in the tagged upstream SDK source. Raising this
+rate did not establish high-FPS motion in this game.
+
+An instrumented v1.0.5 test at a 144 cap measured approximately 60 guest swaps/s
+in a visually confirmed Exhibition match while the old UI read approximately
+140 FPS. Intro/menu similarly produced approximately 60 swaps/s. The correction
+reports guest submission rate and mean/p95/max intervals, separately from UI FPS.
+It is not a measurement of unique completed GPU images, GPU render time or
+simulation ticks. Smooth true 120/144 FPS gameplay remains unresolved; higher caps
+are retained as experimental and the launcher defaults to 60 FPS/VSync.
+
+In the new 60 mode, sampled settled two-second windows measured about 60.0
+submissions/s, mean 16.66–16.67 ms, p95 around 17.4–17.8 ms, with occasional
+outliers. These are local submission timing observations, not a display-capture
+benchmark or proof of a fix on the reporter's RTX 5070 system. Initial loading
+and shader compilation stalls must not be mistaken for settled gameplay pacing.
+
+Deterministic native tests exercise deadline overshoot, missed deadlines, cap
+changes, uncapped mode, sample-window rollover, percentile calculation and stale
+samples. They can be run with `TABLETENNIS_TEST_NATIVE=1` via unittest on Windows.
+The ISO runtime test also checks that an explicit 144 cap overrides saved 60.
+
+The public v1.0.6 installer payload was extracted into the isolated installation
+and its backend completed generation, patching, C++ compilation, launcher/icon
+compilation and staging with cached components and a supplied SDK.
+All 11 tests (including native pacing and ISO runtime checks) then passed. No
+private controller replay or sleep diagnostic remains in the production source.
+No clean-Windows component download/install test or physical-controller retest
+was performed for this update, and issue #8 needs validation on the reporter's PC.
+
 ### v1.0.4 first-run save-dialog regression
 
 Reproduced the reported endless loading screen with an empty, isolated user-data

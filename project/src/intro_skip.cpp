@@ -119,6 +119,10 @@ bool SkipMovies() {
 }
 
 bool ShowTransition() { return phase.load() == Phase::Skipping; }
+bool NeedsStartupPolling() {
+  const auto current = phase.load();
+  return current == Phase::Watching || current == Phase::Skipping;
+}
 
 void AdvanceIntroMovie(PPCContext& ctx, uint8_t* base) {
   // These call sites request single-frame stepping, regardless of dt.

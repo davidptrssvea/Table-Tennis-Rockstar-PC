@@ -146,7 +146,7 @@ namespace TableTennisLauncher
             contentPanel.Children.Add(resGrid);
 
             // Section: Target Framerate / Refresh Rate
-            var secFps = CreateSectionTitle("TARGET FRAMERATE (FPS / REFRESH RATE)");
+            var secFps = CreateSectionTitle("FRAME PACING");
             contentPanel.Children.Add(secFps);
 
             var fpsGrid = new Grid { Margin = new Thickness(0, 4, 0, 10) };
@@ -156,12 +156,12 @@ namespace TableTennisLauncher
 
             var lblFps = new TextBlock { Text = "Framerate Limit (FPS):", Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
             comboFps = new ComboBox { Height = 26, VerticalAlignment = VerticalAlignment.Center };
-            comboFps.Items.Add("60 FPS (Standard 60Hz VSync)");
-            comboFps.Items.Add("120 FPS (Recommended for 4K / 1440p)");
-            comboFps.Items.Add("144 FPS (Recommended for 1440p / 1080p)");
-            comboFps.Items.Add("240 FPS (Ultra-Smooth 240Hz - best at 1440p/1080p)");
-            comboFps.Items.Add("Unlocked (Uncapped / G-Sync & FreeSync)");
-            comboFps.SelectedIndex = 1; // Default 120 FPS
+            comboFps.Items.Add("60 FPS / VSync (recommended)");
+            comboFps.Items.Add("120 cap / tearing (experimental)");
+            comboFps.Items.Add("144 cap / tearing (experimental)");
+            comboFps.Items.Add("240 cap / tearing (experimental)");
+            comboFps.Items.Add("No cap / tearing (experimental)");
+            comboFps.SelectedIndex = 0;
 
             Grid.SetRow(lblFps, 0); Grid.SetColumn(lblFps, 0);
             Grid.SetRow(comboFps, 0); Grid.SetColumn(comboFps, 1);
@@ -171,7 +171,7 @@ namespace TableTennisLauncher
 
             var lblFpsHint = new TextBlock
             {
-                Text = "Hardware Guide: 1440p @ 120-240 FPS runs effortlessly (<2ms render time). Native 4K @ 240 FPS is GPU-bound (~4.5ms); for 4K display, 60 or 120 FPS is recommended.",
+                Text = "Use 60 FPS / VSync for normal play. Higher caps do not unlock the game's ~60 FPS motion. They disable VSync and may look uneven. F10 now reports game submissions separately from UI redraws; its timing is not GPU render time.",
                 Foreground = new SolidColorBrush(Color.FromRgb(170, 175, 190)),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
@@ -199,7 +199,7 @@ namespace TableTennisLauncher
 
             chkShowFps = new CheckBox
             {
-                Content = "Show in-game FPS counter (Hotkey: F10 to toggle)",
+                Content = "Show game-submission timing (F10 to toggle)",
                 Foreground = Brushes.White,
                 FontSize = 13,
                 Margin = new Thickness(4, 3, 0, 8),
@@ -263,7 +263,7 @@ namespace TableTennisLauncher
             };
             var calloutBody = new TextBlock
             {
-                Text = "- ESC : Instantly and cleanly exit game to Windows.\n- F10 : Toggle in-game FPS counter & frame render time (ms).",
+                Text = "- ESC : Exit game to Windows.\n- F10 : Toggle game submission rate, intervals and UI redraw rate.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,
@@ -400,7 +400,7 @@ namespace TableTennisLauncher
         {
             string iso = "";
             string res = "1080p";
-            int framerate = 240;
+            int framerate = 60;
             bool fullscreen = true;
             bool showFps = false;
             string aa = "fxaa";

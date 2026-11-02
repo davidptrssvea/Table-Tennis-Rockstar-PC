@@ -11,6 +11,7 @@ void Uninstall();
 void PollGamepads();
 bool ShowTransition();
 bool SkipMovies();
+bool NeedsStartupPolling();
 void AdvanceIntroMovie(PPCContext& ctx, uint8_t* base);
 bool AdvanceFrontendMovie(PPCContext& ctx, uint8_t* base);
 bool FrontendReady(PPCContext& ctx, uint8_t* base, uint32_t movie);
