@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.1 - 2026-11-02
+
+- Capitalized the final main-menu item as QUIT TO DESKTOP; it remains below EXTRAS.
+
 ## v1.1.0 — 2026-11-02
 
 - Added 2560x1080, 3440x1440 and 3840x1600 ultrawide presets to the launcher.

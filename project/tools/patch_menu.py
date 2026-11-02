@@ -6,7 +6,7 @@ import zlib
 
 ORIGINAL_ARCHIVE = '2dd3b2e2141caf554a63b0791271ab256b9597238f3685ca9569776fb80e28bc'
 ORIGINAL_MOVIE = '75c3a8250db52a44461b5fea383c148ce938229231257f5cd7f8a985848dfa17'
-PATCHED_MOVIE = 'a37a6269f5b4c80d452a0bbdd91e7d63ec888ce6169dfde223a18a81649f33e5'
+PATCHED_MOVIE = 'cd6ad6d72bd9e4642cb529478ae7476e0e3215aba8a443250409e837a776953a'
 
 
 def patch(path):
@@ -51,7 +51,7 @@ def patch(path):
     # The first Push also contains LIST_MAIN; preserve that receiver key.
     extras = extras[:1] + struct.pack('<H', struct.unpack_from('<H', extras, 1)[0] - 2) + extras[5:]
     payload = (b'\x08\xd2\x07' + struct.pack('<i', -1) + b'\x07' + struct.pack('<i', 91)
-               + b'\x00Quit to desktop\x00\x07' + struct.pack('<i', 3) + b'\x08\xa2')
+               + b'\x00QUIT TO DESKTOP\x00\x07' + struct.pack('<i', 3) + b'\x08\xa2')
     quit_item = b'\x96' + struct.pack('<H', len(payload)) + payload + b'\x40\x4d\x4d'
     if len(quit_item) != 42 or len(extras) != 40:
         raise ValueError('Invalid authored menu action layout')

@@ -280,3 +280,12 @@ All 12 checks passed with native compilation and retail-ISO runtime tests enable
 The public package contains exactly 44 allowlisted project-authored source and
 license files; the installer embeds that verified source ZIP. A clean-machine
 prerequisite installation remains untested. Gameplay remains paced at 60 FPS.
+
+### v1.1.1 menu label
+
+The final main-menu label is QUIT TO DESKTOP, below EXTRAS. The new
+verified movie hash was derived from the previously verified v1.1.0 movie by
+changing only the authored label bytes, then reproduced from the original retail
+archive through the public patcher. Reapplying the patch is idempotent. The
+uppercase label and last position were checked in the running game. Nine routine
+checks passed; the three unchanged native/runtime checks were not repeated.
