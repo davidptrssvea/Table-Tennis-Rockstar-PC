@@ -6,7 +6,7 @@ import zlib
 
 ORIGINAL_ARCHIVE = '2dd3b2e2141caf554a63b0791271ab256b9597238f3685ca9569776fb80e28bc'
 ORIGINAL_MOVIE = '75c3a8250db52a44461b5fea383c148ce938229231257f5cd7f8a985848dfa17'
-PATCHED_MOVIE = '220d6f63f77b57f90b474d2f8fe33e2b077347e087160b49a98a2afd8214f13a'
+PATCHED_MOVIE = 'a37a6269f5b4c80d452a0bbdd91e7d63ec888ce6169dfde223a18a81649f33e5'
 
 
 def patch(path):
@@ -44,10 +44,23 @@ def patch(path):
         return
     if hashlib.sha256(archive).hexdigest() != ORIGINAL_ARCHIVE or current != ORIGINAL_MOVIE:
         raise ValueError('Unsupported menu archive; no changes made')
-    # AVM1 Jump skips the entire removed expression, including NewObject.
-    for start, end in ((0x17F0D, 0x17F35), (0x3AC212, 0x3AC23D)):
-        movie[start:end] = b'\x99\x02\x00' + struct.pack('<h', end - start - 5) + bytes(end - start - 5)
-    for address, value in ((0x17FE5, 5), (0x3AC24D, 3), (0x3AC278, 4)):
+    # AVM1 builds the list in reverse stack order. Move Options/Extras into
+    # the former online slot and append an authored Quit label/state instead.
+    extras = bytes(movie[0x17EBB:0x17EE5])
+    options = bytes(movie[0x17EE5:0x17F0D])
+    # The first Push also contains LIST_MAIN; preserve that receiver key.
+    extras = extras[:1] + struct.pack('<H', struct.unpack_from('<H', extras, 1)[0] - 2) + extras[5:]
+    payload = (b'\x08\xd2\x07' + struct.pack('<i', -1) + b'\x07' + struct.pack('<i', 91)
+               + b'\x00Quit to desktop\x00\x07' + struct.pack('<i', 3) + b'\x08\xa2')
+    quit_item = b'\x96' + struct.pack('<H', len(payload)) + payload + b'\x40\x4d\x4d'
+    if len(quit_item) != 42 or len(extras) != 40:
+        raise ValueError('Invalid authored menu action layout')
+    movie[0x17EBB:0x17EE5] = quit_item
+    movie[0x17EE5:0x17F0D] = extras
+    movie[0x17F0D:0x17F35] = options
+    start, end = 0x3AC212, 0x3AC23D
+    movie[start:end] = b'\x99\x02\x00' + struct.pack('<h', end - start - 5) + bytes(end - start - 5)
+    for address, value in ((0x3AC24D, 3), (0x3AC278, 4)):
         movie[address] = value
     # Zero only the fixed startup frame thresholds; retain initialization gates.
     for address in (0x3AABB7, 0x3AB044, 0x3AAC74):

@@ -264,5 +264,100 @@
         "insert": ""
       }
     ]
+  },
+  {
+    "name": "sub_824830A8",
+    "input_sha256": "f451a3f40e1edf075b7174354e448e2cb7eef610e43c37ba4323020c946f0487",
+    "output_sha256": "03a9d8e9bcfbcc3ed1c4db6a36bb9ae5fc29bfc94cd00802934fa3c73461746d",
+    "edits": [
+      {
+        "offset": 463,
+        "delete": 0,
+        "insert": "tabletennis::pc::VideoAspect("
+      },
+      {
+        "offset": 478,
+        "delete": 0,
+        "insert": ")"
+      }
+    ]
+  },
+  {
+    "name": "sub_82143E98",
+    "input_sha256": "4022146431e60af77f90ab97a1d4da627987c461ad845cb13aa8c2e21c760f46",
+    "output_sha256": "7bbd9471647c95aaa45becacb91c5251404fe8ee285ad555c66645975015a20d",
+    "edits": [
+      {
+        "offset": 500,
+        "delete": 0,
+        "insert": "{ ctx.f1.f64 = tabletennis::pc::CameraAspect(ctx.f1.f64); "
+      },
+      {
+        "offset": 507,
+        "delete": 0,
+        "insert": " }"
+      },
+      {
+        "offset": 1756,
+        "delete": 0,
+        "insert": "{ ctx.f1.f64 = tabletennis::pc::CameraAspect(ctx.f1.f64); "
+      },
+      {
+        "offset": 1763,
+        "delete": 0,
+        "insert": " }"
+      },
+      {
+        "offset": 1912,
+        "delete": 0,
+        "insert": "{ ctx.f1.f64 = tabletennis::pc::CameraAspect(ctx.f1.f64); "
+      },
+      {
+        "offset": 1919,
+        "delete": 0,
+        "insert": " }"
+      }
+    ]
+  },
+  {
+    "name": "sub_823F9CA8",
+    "input_sha256": "9a9d81411d52e7a429f6e259abeab4eab612e6fc6e37119c75d84c860e2c1b1a",
+    "output_sha256": "04f7e600c39877ac32beabd580e74dcefcdd7801376e4459dca6fb2546587b6c",
+    "edits": [
+      {
+        "offset": 3806,
+        "delete": 0,
+        "insert": "tabletennis::pc::FixUi(ctx, base, ctx.r1.u32 + 96, ctx.f12.f64);\n\t"
+      },
+      {
+        "offset": 3946,
+        "delete": 0,
+        "insert": "(ctx, base);\n\ttabletennis::pc::EndUi"
+      }
+    ]
+  },
+  {
+    "name": "sub_823F9238",
+    "input_sha256": "c41cf76a54b5dc0040d4b5154896b5d7e8e763d4e19a14a60caeabadb6f1dd95",
+    "output_sha256": "c40ec7c3e1a27b70891d965812af28eec534eeb689cbfcbe067ada1a66e34df3",
+    "edits": [
+      {
+        "offset": 706,
+        "delete": 0,
+        "insert": "tabletennis::pc::CheckQuit(ctx, base, REX_LOAD_U32(0x82602814));\n\t"
+      }
+    ]
+  },
+  {
+    "name": "sub_823537B0",
+    "input_sha256": "98d57f593de31e4f3077b677b4f97d84d2ab3f723bf471a173870313e36084d2",
+    "output_sha256": "f56c2dc8b16ae21f10acb948cf5e9e2dd5de753d9f31e5732f4942b05daa7a29",
+    "edits": [
+      {
+        "offset": 51,
+        "delete": 0,
+        "insert": ");\n\ttabletennis::pc::Scissor(ctx"
+      }
+    ]
   }
 ]

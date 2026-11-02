@@ -14,8 +14,8 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Table Tennis Installer")]
 [assembly: AssemblyDescription("Local game build installer; requires your own retail disc image.")]
-[assembly: AssemblyVersion("1.0.7.0")]
-[assembly: AssemblyFileVersion("1.0.7.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace TableTennisSetup {
     public class Program {
@@ -185,7 +185,7 @@ namespace TableTennisSetup {
                 int exit = await Task.Run(delegate {
                     Directory.CreateDirectory(target);
                     logPath = Path.Combine(target, "installation.log");
-                    File.WriteAllText(logPath, "Table Tennis local installer v1.0.7" + Environment.NewLine, Encoding.UTF8);
+                    File.WriteAllText(logPath, "Table Tennis local installer v1.1.0" + Environment.NewLine, Encoding.UTF8);
                     ExtractSource(target);
                     string script = Path.Combine(target, "project", "tools", "bootstrap.ps1");
                     string args = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(script) + " -Root " + Quote(target) + " -IsoPath " + Quote(image) + " -AllowToolInstall";

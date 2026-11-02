@@ -6,7 +6,7 @@ Build and play from **your own Xbox 360 disc image**. A graphical installer prep
 
 ## Get started
 
-1. Download **[Install-Table-Tennis.exe — installer preview](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.0.7/Install-Table-Tennis.exe)**.
+1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.1.0/Install-Table-Tennis.exe)**.
 2. Open it, choose your retail **Table Tennis ISO**, allow the required components, and click **Install**.
 3. When it says **Ready to play**, click **Play**. A desktop shortcut is also created when Windows permits it.
 
@@ -39,6 +39,18 @@ Choose your display preset directly in the game launcher:
 
 The 1440p and 4K presets raise the internal rendering scale as well as the output size. The 1080p preset keeps 1× internal rendering and uses the selected presentation filter for output scaling.
 
+### Ultrawide and the PC menu
+
+The 21:9 presets widen the 3D camera view instead of stretching players. Menus,
+loading screens and the score HUD retain their proportions in a centered 16:9
+safe area. UI drawing is clipped to that area so hidden off-stage artwork does
+not appear in the extra space. The camera adapts to the actual game window,
+including fullscreen. Internal 3D rendering still uses the original render target
+with the selected scale; the listed sizes are display output dimensions.
+
+**Quit to desktop** is the last main-menu item. Select it and press A to close the
+game normally. Xbox Live remains unavailable.
+
 ### High-refresh display options
 
 Use **60 FPS** for normal play. Retained 120/144/240/no-cap selections are currently paced at 60 as well, preserving normal game speed until game-timer changes are independently verified. Guest VSync is disabled through the late-loaded GPU plugin, and the single host limiter controls submission timing. Tearing is allowed by default; this can reduce blocking in GPU emulation but visible tearing depends on the display configuration.
@@ -60,15 +72,15 @@ F10 opens a separate native statistics window with submission rate, average/p99/
 
 ### Offline menu and startup improvements
 
-- Xbox Live removed from the main menu to avoid the unavailable online screen. Tournament, Exhibition, Training Mode, Options and Extras remain available.
+- Xbox Live removed from the main menu to avoid the unavailable online screen. Tournament, Exhibition, Training Mode, Options and Extras remain available, followed by Quit to desktop.
 - A gamepad button immediately stops the startup intro and continues to the main menu after loading, without another Start press.
 - A large, centered, antialiased **LOADING MAIN MENU...** transition while the menu initializes. The skip press cannot accidentally select a menu item.
 
 ## If installation stops
 
-**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.0.7 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
+**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.1.0 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
 
-**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.0.7 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
+**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.1.0 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
 
 Click **Open log** in the installer. You can retry after fixing the reported issue; downloaded components are cached. If Windows security blocks a required component, installation stops and security settings remain unchanged.
 
@@ -87,9 +99,9 @@ Locally generated files stay under the installation folder. Do not upload `dist`
 <details>
 <summary>Developer / advanced installation</summary>
 
-The **Table-Tennis-Local-Build-v1.0.7.zip** asset is the source package for developers. It is not required by players using the installer.
+The **Table-Tennis-Local-Build-v1.1.0.zip** asset is the source package for developers. It is not required by players using the installer.
 
-For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
+For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 **17.14 / MSVC v143 14.44 or newer** C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
 ```powershell
 .\setup.ps1 -IsoPath 'E:\Games\TableTennis.iso' -SdkPath 'E:\Tools\rexglue-sdk-0.10.0' -NoDownload
@@ -103,7 +115,7 @@ Checks and source packaging:
 py -3 -m unittest discover -s tests -v
 py -3 project/tools/package_source.py --audit-index
 py -3 project/tools/package_source.py --output 'E:\ReleaseOutput'
-powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Local-Build-v1.0.7.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
+powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Local-Build-v1.1.0.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
 ```
 
 The installer builder validates every embedded source file against the public allowlist before compilation. It rejects extra or altered payload files. Native patch rules store offsets, hashes and replacement text rather than removed original function bodies. See [implementation and validation](reports/LOCAL_BUILD.md) and [changelog](CHANGELOG.md).

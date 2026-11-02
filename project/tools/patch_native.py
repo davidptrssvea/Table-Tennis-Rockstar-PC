@@ -45,7 +45,8 @@ def patch(folder):
             return apply_edits(match.group(0), rules[name])
         updated = PATTERN.sub(replace, text)
         for namespace, include in (('tabletennis::intro::', 'intro_skip.h'),
-                                   ('tabletennis::pacing::', 'frame_pacer.h')):
+                                   ('tabletennis::pacing::', 'frame_pacer.h'),
+                                   ('tabletennis::pc::', 'pc_features.h')):
             if namespace in updated and f'#include "{include}"' not in updated:
                 first_line, rest = updated.split('\n', 1)
                 updated = first_line + f'\n#include "{include}"\n' + rest

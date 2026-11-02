@@ -243,3 +243,40 @@ passed, including compiled schedule checks, direct/saved-ISO startup, command-li
 framerate precedence and effective late-loaded VSync/tearing values. The installer
 was compiled at version 1.0.7.0; its embedded ZIP hash matched the reviewed source.
 This does not validate automatic prerequisite installation on a clean machine.
+
+
+### v1.1.0 ultrawide and Quit to desktop
+
+Five additional hash-verified local edits extend the existing 18: the camera
+aspect accessor, root Flash rendering and its caller, D3D scissor emission and
+video-quad aspect fitting. The authored host code corrects the camera projection,
+shrinks/centers only Flash UI horizontally and clips off-stage UI art. It restores
+the previous scissor state after each root draw. Square/shadow cameras retain
+their original aspect. Original-derived files remain local and excluded.
+
+The frontend array is rebuilt in place from verified retail bytes: Tournament,
+Exhibition, Training, Options, Extras, Quit to desktop. Its localization refresh
+retains the offline Options/Extras indices. Quit targets the former unavailable
+online transition; the host observes the pending destination on the rendered
+frontend and posts the normal WM_CLOSE rather than waiting for a connection.
+A scripted A press selected Quit and the runtime reported execution complete
+before exiting. The desktop launcher and Escape remain available.
+
+The original 1280x720 render target/scaled output is retained, not a claim of a
+new native ultrawide framebuffer. 3D projection and 2D physical proportions are
+corrected separately. Local 1280x540 tests (same aspect as 2560x1080) verified
+main menus, player selection, help dialogs and the score HUD during Exhibition.
+Automated geometry checks cover the three advertised ultrawide ratios and 16:9.
+
+Final validation also exercised a 1720x720 window (same ratio as 3440x1440).
+At Windows 150% scaling the SDK reported a 2580x1080 physical render surface;
+the camera ratio was 2.388889 and the captured menu had normal proportions.
+Aspect updates use the SDK physical resize callback, including the initial
+surface size, rather than polling Win32 client coordinates. Native 3440/3840
+monitor output was not tested on this 2560x1440 display.
+
+The release candidate was rebuilt without the private controller replay harness.
+All 12 checks passed with native compilation and retail-ISO runtime tests enabled.
+The public package contains exactly 44 allowlisted project-authored source and
+license files; the installer embeds that verified source ZIP. A clean-machine
+prerequisite installation remains untested. Gameplay remains paced at 60 FPS.

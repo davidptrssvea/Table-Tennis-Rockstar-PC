@@ -6,6 +6,7 @@
 #include <rex/filesystem.h>
 #include "offline_menu_device.h"
 #include "intro_skip.h"
+#include "pc_features.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
 #ifndef WIN32_LEAN_AND_MEAN
@@ -150,6 +151,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ~TabletennisApp() override {
+    tabletennis::pc::SetWindow(nullptr);
     tabletennis::intro::Uninstall();
     rex::ui::UnregisterBind("bind_toggle_fps");
     rex::ui::UnregisterBind("bind_quit_game");
@@ -368,7 +370,16 @@ class TabletennisApp : public rex::ReXApp {
     REXLOG_INFO("TabletennisApp: Binds for ESC (Quit) and F10 (FPS Toggle) are active");
   }
 
+  void OnWindowPixelSizeChanged(uint32_t width, uint32_t height) override {
+    tabletennis::pc::SetSurfaceSize(width,height);
+  }
+
   void OnPostSetup() override {
+    if (window()) {
+      tabletennis::pc::SetWindow(window()->GetNativeWindowHandle());
+      tabletennis::pc::SetSurfaceSize(window()->GetActualPhysicalWidth(),window()->GetActualPhysicalHeight());
+    }
+    rex::cvar::SetFlagByName("present_letterbox", "false");
     REXLOG_INFO("Tabletennis: loaded GPU timing flags: vsync={}, tearing={}",
                 rex::cvar::GetFlagByName("vsync"),
                 rex::cvar::GetFlagByName("d3d12_allow_variable_refresh_rate_and_tearing"));

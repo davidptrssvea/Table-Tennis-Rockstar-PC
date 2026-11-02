@@ -182,5 +182,19 @@ class NativePacingTests(unittest.TestCase):
             subprocess.run([str(executable)], check=True, timeout=10)
 
 
+@unittest.skipUnless(sys.platform == 'win32' and os.environ.get('TABLETENNIS_TEST_NATIVE'),
+                     'Opt-in native screen-layout test needs the compiler environment')
+class NativeScreenTests(unittest.TestCase):
+    def test_ui_proportions_and_scissor_bounds(self):
+        root = Path(__file__).resolve().parents[1]
+        _, _, clang, _, env = setup_build.build_tools()
+        with tempfile.TemporaryDirectory(prefix='Table Tennis aspect ') as directory:
+            executable = Path(directory) / 'layout.exe'
+            subprocess.run([str(clang), '-std=c++23', '-UNDEBUG',
+                            '-I' + str(root / 'project/src'), str(root / 'tests/pc_features_test.cpp'),
+                            '-o', str(executable)], check=True, env=env)
+            subprocess.run([str(executable)], check=True, timeout=10)
+
+
 if __name__ == '__main__':
     unittest.main()

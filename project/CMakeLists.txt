@@ -16,6 +16,7 @@ set(TABLETENNIS_SOURCES
     src/intro_skip.cpp
     src/frame_pacer.cpp
     src/stats_window.cpp
+    src/pc_features.cpp
 )
 
 if(WIN32)

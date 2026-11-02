@@ -15,6 +15,8 @@ FIXED_FILES = {
     'project/src/intro_skip.cpp', 'project/src/intro_skip.h',
     'project/src/frame_pacer.cpp', 'project/src/frame_pacer.h',
     'project/src/frame_schedule.h', 'tests/frame_pacing_test.cpp',
+    'project/src/pc_features.cpp', 'project/src/pc_features.h',
+    'project/src/screen_layout.h', 'tests/pc_features_test.cpp',
     'project/src/stats_window.cpp', 'project/src/stats_window.h',
     'project/sdk-overrides/rex/platform/fpscr.h', 'project/sdk-overrides/rex/ppc/context.h',
     'project/sdk-overrides/rex_app.cpp',
@@ -47,7 +49,7 @@ def package(output):
     files = audit()
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    path = output / 'Table-Tennis-Local-Build-v1.0.7.zip'
+    path = output / 'Table-Tennis-Local-Build-v1.1.0.zip'
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name in files:
             archive.write(ROOT / name, name)

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.0 — 2026-11-02
+
+- Added 2560x1080, 3440x1440 and 3840x1600 ultrawide presets to the launcher.
+- Adapt the 3D camera to the actual window aspect ratio. Menus and score HUD retain normal proportions in a centered 16:9 safe area, with GPU scissor clipping to hide off-stage artwork.
+- Preserve the original video aspect when placing movie quads on a wide display.
+- Added Quit to desktop as the final main-menu item. It sends the normal window-close request without entering the unavailable Xbox Live connection flow.
+- Keep 60 FPS pacing, intro skip, offline profile/menu fixes, ISO support and the credited desktop shortcut from earlier releases.
+- Added compiled checks for square UI proportions, centered safe areas and scissor bounds. The launcher scrolls when needed on smaller desktops.
+
 ## v1.0.7 — 2026-11-02
 
 - Integrated malinkicat's PR #6 frame-pacing work, preserving the later command-line framerate precedence fix.

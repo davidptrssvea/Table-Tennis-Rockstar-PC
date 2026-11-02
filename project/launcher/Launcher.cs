@@ -21,9 +21,9 @@ namespace TableTennisLauncher
     {
         private TextBox txtIsoPath;
         private TextBlock txtIsoStatus;
-        private RadioButton rb720, rb1080, rb1440, rb4k;
+        private RadioButton rb720, rb1080, rb1440, rb4k, rbUltra;
         private CheckBox chkFullscreen, chkShowFps;
-        private ComboBox comboFps;
+        private ComboBox comboFps, comboUltra;
         private ComboBox comboAA, comboPost;
         private TextBlock txtStatus;
 
@@ -34,7 +34,7 @@ namespace TableTennisLauncher
         {
             Title = "Rockstar Games presents Table Tennis - Settings & Launcher";
             Width = 640;
-            Height = 820;
+            Height = Math.Min(860, SystemParameters.WorkArea.Height - 32);
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             Background = new SolidColorBrush(Color.FromRgb(18, 20, 26));
@@ -120,7 +120,7 @@ namespace TableTennisLauncher
             contentPanel.Children.Add(txtIsoStatus);
 
             // Section: Display Resolution
-            var secRes = CreateSectionTitle("DISPLAY RESOLUTION (NATIVE INTERNAL RENDERING)");
+            var secRes = CreateSectionTitle("DISPLAY RESOLUTION & 3D SCALE");
             contentPanel.Children.Add(secRes);
 
             var resGrid = new Grid { Margin = new Thickness(0, 4, 0, 10) };
@@ -131,8 +131,8 @@ namespace TableTennisLauncher
 
             rb720 = CreateRadioButton("720p (1280x720) - 1x Native", "resGroup");
             rb1080 = CreateRadioButton("1080p (1920x1080) - Full HD", "resGroup");
-            rb1440 = CreateRadioButton("1440p (2560x1440) - Native 2K QHD (2x)", "resGroup");
-            rb4k = CreateRadioButton("4K (3840x2160) - Native Ultra HD (3x)", "resGroup");
+            rb1440 = CreateRadioButton("1440p (2560x1440) - 2x 3D scale", "resGroup");
+            rb4k = CreateRadioButton("4K (3840x2160) - 3x 3D scale", "resGroup");
 
             Grid.SetRow(rb720, 0); Grid.SetColumn(rb720, 0);
             Grid.SetRow(rb1080, 0); Grid.SetColumn(rb1080, 1);
@@ -143,6 +143,17 @@ namespace TableTennisLauncher
             resGrid.Children.Add(rb1080);
             resGrid.Children.Add(rb1440);
             resGrid.Children.Add(rb4k);
+            resGrid.RowDefinitions.Add(new RowDefinition());
+            rbUltra = CreateRadioButton("Ultrawide 21:9", "resGroup");
+            comboUltra = new ComboBox { Height = 28, Margin = new Thickness(4), FontSize = 12 };
+            comboUltra.Items.Add("2560 x 1080 (2x 3D scale)");
+            comboUltra.Items.Add("3440 x 1440 (3x 3D scale)");
+            comboUltra.Items.Add("3840 x 1600 (3x 3D scale)");
+            comboUltra.SelectedIndex = 0;
+            comboUltra.SelectionChanged += (sender, args) => { if(rbUltra != null) rbUltra.IsChecked = true; };
+            Grid.SetRow(rbUltra, 2); Grid.SetColumn(rbUltra, 0);
+            Grid.SetRow(comboUltra, 2); Grid.SetColumn(comboUltra, 1);
+            resGrid.Children.Add(rbUltra);resGrid.Children.Add(comboUltra);
             contentPanel.Children.Add(resGrid);
 
             // Section: Target Framerate / Refresh Rate
@@ -263,7 +274,7 @@ namespace TableTennisLauncher
             };
             var calloutBody = new TextBlock
             {
-                Text = "- ESC : Exit game to Windows.\n- F10 : Toggle game submission rate, intervals and UI redraw rate.",
+                Text = "- ESC : Exit game to Windows.\n- F10 : Show FPS, frame-time graph and presentation timing.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,
@@ -284,8 +295,9 @@ namespace TableTennisLauncher
             };
             contentPanel.Children.Add(txtStatus);
 
-            Grid.SetRow(contentPanel, 1);
-            root.Children.Add(contentPanel);
+            var scroll = new ScrollViewer { Content = contentPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
 
             // --- FOOTER BUTTONS ---
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
@@ -457,6 +469,10 @@ namespace TableTennisLauncher
             if (res == "720p") rb720.IsChecked = true;
             else if (res == "1440p") rb1440.IsChecked = true;
             else if (res == "4k") rb4k.IsChecked = true;
+            else if (res == "2560x1080" || res == "3440x1440" || res == "3840x1600") {
+                comboUltra.SelectedIndex = res == "2560x1080" ? 0 : res == "3440x1440" ? 1 : 2;
+                rbUltra.IsChecked = true;
+            }
             else rb1080.IsChecked = true;
 
             if (framerate == 60) comboFps.SelectedIndex = 0;
@@ -485,6 +501,7 @@ namespace TableTennisLauncher
             if (rb720.IsChecked == true) res = "720p";
             else if (rb1440.IsChecked == true) res = "1440p";
             else if (rb4k.IsChecked == true) res = "4k";
+            else if (rbUltra.IsChecked == true) res = comboUltra.SelectedIndex == 0 ? "2560x1080" : comboUltra.SelectedIndex == 1 ? "3440x1440" : "3840x1600";
 
             int targetFps = 240;
             if (comboFps.SelectedIndex == 0) targetFps = 60;
@@ -558,6 +575,12 @@ namespace TableTennisLauncher
                 width = 3840;
                 height = 2160;
                 resScale = 3;
+            }
+
+            if (rbUltra.IsChecked == true) {
+                width = comboUltra.SelectedIndex == 0 ? 2560 : comboUltra.SelectedIndex == 1 ? 3440 : 3840;
+                height = comboUltra.SelectedIndex == 0 ? 1080 : comboUltra.SelectedIndex == 1 ? 1440 : 1600;
+                resScale = comboUltra.SelectedIndex == 0 ? 2 : 3;
             }
 
             int targetFps = 240;
