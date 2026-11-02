@@ -322,3 +322,10 @@ followed by 16.666 ms. Deterministic tests verify that this comes from the
 retained deadline correction. The original causes of late work, shader/loading,
 OS scheduling and GPU-driver stalls are not claimed eliminated. No new public
 release is part of this development change.
+
+### v1.1.2 release packaging
+
+The late-frame recovery change above is packaged as v1.1.2 at the user's request.
+The production game code is unchanged from the candidate that passed all 12
+checks. The telemetry experiment remains excluded. The installer version and
+public download links are updated, with the same 44-file public source allowlist.
