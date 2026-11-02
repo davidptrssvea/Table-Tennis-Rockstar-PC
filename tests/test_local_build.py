@@ -135,12 +135,12 @@ class RuntimeIsoTests(unittest.TestCase):
                         shutil.copy2(path, target / path.name)
                 shutil.copytree(dist / 'assets', target / 'assets')
                 settings = f'iso_path={iso}\n' if source == 'settings' else ''
-                (target / 'settings.ini').write_text(settings + 'framerate=60\n', encoding='utf-8')
+                (target / 'settings.ini').write_text(settings + 'framerate=60\nallow_tearing=true\n', encoding='utf-8')
                 args = [str(target / 'tabletennis.exe'), '--fullscreen=false']
                 if source == 'argument':
                     args.append('--game_data_root=' + str(iso))
                     # Explicit selection must win over settings.ini's 60 cap.
-                    args.append('--framerate=144')
+                    args.extend(['--framerate=144', '--allow_tearing=false'])
                 process = subprocess.Popen(args, cwd=target.parent,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
@@ -157,7 +157,10 @@ class RuntimeIsoTests(unittest.TestCase):
                     self.assertNotIn('--game_data_root does not exist', log)
                     self.assertIn('TabletennisOfflineMenu', log, log[-6000:])
                     if source == 'argument':
-                        self.assertIn('Experimental submission cap 144', log)
+                        self.assertIn('framerate 144 requested; pacing at 60', log)
+                        self.assertIn('loaded GPU timing flags: vsync=false, tearing=false', log)
+                    else:
+                        self.assertIn('loaded GPU timing flags: vsync=false, tearing=true', log)
                     self.assertIsNone(process.poll(), 'Game exited during ISO startup')
                 finally:
                     if process.poll() is None:
@@ -168,7 +171,7 @@ class RuntimeIsoTests(unittest.TestCase):
 @unittest.skipUnless(sys.platform == 'win32' and os.environ.get('TABLETENNIS_TEST_NATIVE'),
                      'Opt-in native pacing test needs the compiler environment')
 class NativePacingTests(unittest.TestCase):
-    def test_deadlines_and_submission_statistics(self):
+    def test_frame_schedule(self):
         root = Path(__file__).resolve().parents[1]
         _, _, clang, _, env = setup_build.build_tools()
         with tempfile.TemporaryDirectory(prefix='Table Tennis pacing ') as directory:

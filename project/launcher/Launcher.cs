@@ -156,11 +156,11 @@ namespace TableTennisLauncher
 
             var lblFps = new TextBlock { Text = "Framerate Limit (FPS):", Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
             comboFps = new ComboBox { Height = 26, VerticalAlignment = VerticalAlignment.Center };
-            comboFps.Items.Add("60 FPS / VSync (recommended)");
-            comboFps.Items.Add("120 cap / tearing (experimental)");
-            comboFps.Items.Add("144 cap / tearing (experimental)");
-            comboFps.Items.Add("240 cap / tearing (experimental)");
-            comboFps.Items.Add("No cap / tearing (experimental)");
+            comboFps.Items.Add("60 FPS (recommended)");
+            comboFps.Items.Add("120 requested / paced at 60");
+            comboFps.Items.Add("144 requested / paced at 60");
+            comboFps.Items.Add("240 requested / paced at 60");
+            comboFps.Items.Add("No cap requested / paced at 60");
             comboFps.SelectedIndex = 0;
 
             Grid.SetRow(lblFps, 0); Grid.SetColumn(lblFps, 0);
@@ -171,7 +171,7 @@ namespace TableTennisLauncher
 
             var lblFpsHint = new TextBlock
             {
-                Text = "Use 60 FPS / VSync for normal play. Higher caps do not unlock the game's ~60 FPS motion. They disable VSync and may look uneven. F10 now reports game submissions separately from UI redraws; its timing is not GPU render time.",
+                Text = "All selections currently run at 60 FPS to preserve game speed. F10 opens a separate timing window with a graph. Submission and Present-call timing do not measure GPU render duration or physical display scanout.",
                 Foreground = new SolidColorBrush(Color.FromRgb(170, 175, 190)),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,

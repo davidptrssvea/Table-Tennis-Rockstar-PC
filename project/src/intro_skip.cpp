@@ -119,9 +119,13 @@ bool SkipMovies() {
 }
 
 bool ShowTransition() { return phase.load() == Phase::Skipping; }
-bool NeedsStartupPolling() {
+
+bool UiWorkFinished() {
   const auto current = phase.load();
-  return current == Phase::Watching || current == Phase::Skipping;
+  if (current == Phase::Done || current == Phase::Drain) return startup_gamepads.empty();
+  // At the startup save prompt input is already handled by FilterInput, and
+  // the loading transition is no longer shown.
+  return current == Phase::Prompt && frontend_started.load();
 }
 
 void AdvanceIntroMovie(PPCContext& ctx, uint8_t* base) {

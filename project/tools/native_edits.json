@@ -179,6 +179,18 @@
     ]
   },
   {
+    "name": "sub_8235B750",
+    "input_sha256": "5c515aa27019e10d6daa90871a5869490d555def8ac6085e028460e01893a858",
+    "output_sha256": "997f74fe1bf1a8b4ae8ac46807f8ecad9ca5aa4a60cb2289f9db3c172d24e576",
+    "edits": [
+      {
+        "offset": 70,
+        "delete": 0,
+        "insert": "\t// PC PORT: hold the frame to the pacing schedule before it is swapped and\n\t// kicked to the GPU, so frames reach the screen at fixed intervals.\n\ttabletennis::pacing::BeforeSwap();\n"
+      }
+    ]
+  },
+  {
     "name": "sub_823D3FF8",
     "input_sha256": "b3d12f2788e65207cfead33f200e899a5f7e7103e72d910e8682b7f746cc49b3",
     "output_sha256": "2f6068a287145f435e5b2a86071bfdd75be0f3203e5989dbc97fff09d34f5be9",

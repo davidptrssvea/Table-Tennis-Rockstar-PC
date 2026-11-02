@@ -14,6 +14,8 @@ include(cmake/rexglue.cmake)
 set(TABLETENNIS_SOURCES
     src/main.cpp
     src/intro_skip.cpp
+    src/frame_pacer.cpp
+    src/stats_window.cpp
 )
 
 if(WIN32)
@@ -23,6 +25,11 @@ else()
 endif()
 
 rexglue_setup_target(tabletennis)
+
+if(WIN32)
+    # frame_pacer: 1 ms timer resolution, DXGI Present hook.
+    target_link_libraries(tabletennis PRIVATE winmm d3d11)
+endif()
 
 # The stock v0.10.0 application accepts directories only. Compile our BSD-licensed
 # ISO-capable application adapter instead, without editing the installed SDK.

@@ -6,7 +6,8 @@
 #include <rex/filesystem.h>
 #include "offline_menu_device.h"
 #include "intro_skip.h"
-#include "frame_pacing.h"
+#include "frame_pacer.h"
+#include "stats_window.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -17,9 +18,15 @@
 #include <rex/ui/imgui_dialog.h>
 #include <rex/ui/imgui_drawer.h>
 #include <rex/ui/keybinds.h>
+#include <rex/ui/overlay/achievement_toast.h>
+#include <rex/ui/windowed_app_context.h>
 #include <rex/ui/window.h>
 #include <imgui.h>
 
+#include <cctype>
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -28,18 +35,23 @@
 
 REXCVAR_DECLARE(bool, show_fps);
 REXCVAR_DECLARE(int32_t, framerate);
+REXCVAR_DECLARE(bool, allow_tearing);
+REXCVAR_DECLARE(bool, frame_log);
 
-class FpsOverlayDialog : public rex::ui::ImGuiDialog {
+// Startup-only ImGui work: gamepad polling during the intro and the loading
+// transition. While any ImGui dialog is attached the presenter repaints on
+// every display refresh, which puts 60 FPS frames on an uneven 2-3-2-3
+// refresh pattern and competes with GPU emulation, so this detaches as soon
+// as the startup sequence no longer needs it. The FPS overlay is a separate
+// window (stats_window) for the same reason.
+class StartupDialog : public rex::ui::ImGuiDialog {
  public:
-  explicit FpsOverlayDialog(rex::ui::ImGuiDrawer* drawer, ImFont* loading_font)
-      : rex::ui::ImGuiDialog(drawer), loading_font_(loading_font) {}
-
-  void Attach() {
-    if (!attached_) { imgui_drawer()->AddDialog(this); attached_ = true; }
+  explicit StartupDialog(rex::ui::ImGuiDrawer* drawer, ImFont* loading_font)
+      : rex::ui::ImGuiDialog(drawer), loading_font_(loading_font) {
+    tabletennis::pacing::SetUiActive(true);  // The base constructor attached it.
   }
-  void SetVisible(bool visible) { visible_ = visible; if (visible) Attach(); }
-  bool IsVisible() const { return visible_; }
-  void Toggle() { SetVisible(!visible_); }
+
+  bool attached() const { return attached_; }
 
  protected:
   void OnDraw(ImGuiIO& io) override {
@@ -61,57 +73,70 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
                           viewport->Pos.y + (viewport->Size.y - size.y) * 0.5f),
                     IM_COL32(255, 255, 255, 255), message);
     }
-    if (!visible_) {
-      // Leave the SDK's immediate guest-output presentation path available
-      // during play. A hidden always-attached dialog otherwise keeps painting
-      // duplicated guest images at the independent UI refresh rate.
-      if (!tabletennis::intro::NeedsStartupPolling() && attached_) {
-        imgui_drawer()->RemoveDialog(this);
-        attached_ = false;
-        REXLOG_INFO("Tabletennis: Hidden FPS/startup overlay detached; guest-output presentation released");
-      }
-      return;
+    if (tabletennis::intro::UiWorkFinished()) {
+      imgui_drawer()->RemoveDialog(this);
+      attached_ = false;
+      tabletennis::pacing::SetUiActive(false);
+      REXLOG_INFO("TabletennisApp: startup dialog detached; presenting game frames only");
     }
-
-    // Position overlay at top-left with slight offset
-    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.65f);
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
-                             ImGuiWindowFlags_AlwaysAutoResize |
-                             ImGuiWindowFlags_NoSavedSettings |
-                             ImGuiWindowFlags_NoFocusOnAppearing |
-                             ImGuiWindowFlags_NoNav |
-                             ImGuiWindowFlags_NoInputs;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 6.0f));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.08f, 0.12f, 0.85f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.42f, 0.70f, 0.60f));
-
-    if (ImGui::Begin("##FpsOverlay", nullptr, flags)) {
-      const auto stats = tabletennis::frames::submissions.Read(tabletennis::frames::Clock::now());
-      float fps = static_cast<float>(stats.fps);
-
-      ImVec4 color = (fps >= 115.0f) ? ImVec4(0.0f, 0.9f, 1.0f, 1.0f) :   // Cyan for 120Hz/144Hz/240Hz
-                     (fps >= 55.0f)  ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) :   // Green for 60Hz
-                     (fps >= 30.0f)  ? ImVec4(1.0f, 0.85f, 0.2f, 1.0f) :  // Yellow
-                                       ImVec4(1.0f, 0.3f, 0.3f, 1.0f);    // Red
-
-      ImGui::TextColored(color, "Game submissions: %.1f FPS", fps);
-      ImGui::TextDisabled("Mean %.2f ms | p95 %.2f ms | max %.2f ms",
-                         stats.mean_ms, stats.p95_ms, stats.max_ms);
-      ImGui::TextDisabled("UI redraws: %.1f FPS (not game FPS)", io.Framerate);
-    }
-    ImGui::End();
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
   }
 
  private:
   ImFont* loading_font_ = nullptr;
-  bool visible_ = false;
+  bool attached_ = true;  // ImGuiDialog's constructor attaches it
+};
+
+// Flags owned by the GPU plugin (e.g. "vsync") are registered only when the
+// plugin DLL loads, after OnPreSetup, and SetFlagByName silently rejects
+// unknown names. The SDK applies REX_<NAME> environment variables when a late
+// flag registers, so fall back to that.
+inline void SetPluginFlag(const char* name, const char* value) {
+  if (rex::cvar::SetFlagByName(name, value)) {
+    return;
+  }
+  std::string env = "REX_";
+  for (const char* c = name; *c; ++c) env += char(std::toupper(static_cast<unsigned char>(*c)));
+  SetEnvironmentVariableA(env.c_str(), value);
+}
+
+// The stock toast dialog stays attached to the ImGui drawer for the whole
+// session, which makes the presenter repaint on every display refresh (see
+// StartupDialog). Attach it only while a toast can be on screen.
+class OnDemandToastDialog : public rex::ui::AchievementToastDialog {
+ public:
+  OnDemandToastDialog(rex::ui::WindowedAppContext& app_context, rex::ui::ImGuiDrawer* drawer,
+                      rex::ui::ImmediateDrawer* immediate_drawer, rex::Runtime* runtime)
+      : AchievementToastDialog(drawer, immediate_drawer, runtime), app_context_(app_context) {
+    imgui_drawer()->RemoveDialog(this);  // The base constructor attached it.
+  }
+
+  void Push(const rex::system::AchievementEvent& event) override {
+    AchievementToastDialog::Push(event);
+    app_context_.CallInUIThreadDeferred([this]() {
+      // Toasts are shown one after another for 4.5 s each.
+      const auto now = std::chrono::steady_clock::now();
+      visible_until_ = std::max(visible_until_, now) + std::chrono::milliseconds(4700);
+      if (!attached_) {
+        imgui_drawer()->AddDialog(this);
+        attached_ = true;
+        tabletennis::pacing::SetUiActive(true);
+      }
+    });
+  }
+
+ protected:
+  void OnDraw(ImGuiIO& io) override {
+    AchievementToastDialog::OnDraw(io);
+    if (attached_ && std::chrono::steady_clock::now() > visible_until_) {
+      imgui_drawer()->RemoveDialog(this);
+      attached_ = false;
+      tabletennis::pacing::SetUiActive(false);
+    }
+  }
+
+ private:
+  rex::ui::WindowedAppContext& app_context_;
+  std::chrono::steady_clock::time_point visible_until_{};
   bool attached_ = false;
 };
 
@@ -128,10 +153,11 @@ class TabletennisApp : public rex::ReXApp {
     tabletennis::intro::Uninstall();
     rex::ui::UnregisterBind("bind_toggle_fps");
     rex::ui::UnregisterBind("bind_quit_game");
-    if (imgui_drawer_ && fps_overlay_) {
-      imgui_drawer_->RemoveDialog(fps_overlay_.get());
+    tabletennis::stats_window::Hide();
+    if (imgui_drawer_ && startup_dialog_ && startup_dialog_->attached()) {
+      imgui_drawer_->RemoveDialog(startup_dialog_.get());
     }
-    fps_overlay_.reset();
+    startup_dialog_.reset();
   }
 
   static std::unique_ptr<rex::ui::WindowedApp> Create(
@@ -171,6 +197,9 @@ class TabletennisApp : public rex::ReXApp {
               REXLOG_INFO("TabletennisApp: Target framerate from settings.ini: {} FPS", target);
             }
           } catch (...) {}
+        } else if (line.rfind("allow_tearing=", 0) == 0 &&
+                   rex::cvar::GetFlagSource("allow_tearing") < rex::cvar::Source::kCommandLine) {
+          REXCVAR_SET(allow_tearing, line.compare(14, 4, "true") == 0);
         }
       }
     }
@@ -219,23 +248,40 @@ class TabletennisApp : public rex::ReXApp {
       config.gpu_plugin = "xenos";
     }
 
-    // Report the original video mode to preserve the game's timing assumptions.
-    // SDK v0.10.0 uses a 1kHz VBlank worker when vsync=false, independently
-    // of this mode value. A higher cap does not unlock game motion by itself.
+    // Preserve the reported retail mode. With guest vsync off the SDK uses
+    // a 1 kHz VBlank worker; the host pacer independently limits submissions.
     rex::cvar::SetFlagByName("video_mode_refresh_rate", "60.0");
 
     int32_t target_hz = REXCVAR_GET(framerate);
-    if (target_hz != 60) {
-      // High refresh rate / uncapped presentation via D3D12 tearing
-      rex::cvar::SetFlagByName("vsync", "false");
-      rex::cvar::SetFlagByName("d3d12_allow_variable_refresh_rate_and_tearing", "true");
-      REXLOG_INFO("TabletennisApp::OnPreSetup - Experimental submission cap {} (vsync=false, reported_mode=60Hz, SDK no-vsync VBlank=1000Hz); game motion is not unlocked", target_hz);
-    } else {
-      rex::cvar::SetFlagByName("vsync", "true");
-      REXLOG_INFO("TabletennisApp::OnPreSetup - Standard 60 Hz VSync enabled");
+    std::filesystem::path frame_log;
+    if (REXCVAR_GET(frame_log)) {
+      frame_log = rex::filesystem::GetExecutableFolder() / "frametimes.csv";
     }
+    tabletennis::pacing::Initialize(target_hz, frame_log);
+    // The SDK presenter always presents immediately; this only decides whether
+    // a present may tear instead of waiting for the next display refresh.
+    // Without tearing, Present can block on the display while holding the
+    // D3D12 queue that GPU emulation also submits to, which stalls the game
+    // (measured: 47 FPS in a rally instead of 60).
+    const bool tearing = REXCVAR_GET(allow_tearing);
+    SetPluginFlag("d3d12_allow_variable_refresh_rate_and_tearing", tearing ? "true" : "false");
+    // Guest "vsync" off in every mode: with it on, the SDK command processor
+    // sleeps >= 1 ms on every GPU wait and the game falls to 30-48 FPS. The
+    // guest vblank then runs at 1 kHz and frame_pacer holds 60.
+    SetPluginFlag("vsync", "false");
+    REXLOG_INFO("TabletennisApp::OnPreSetup - 60 FPS, host-paced, tearing {}",
+                tearing ? "allowed" : "off");
 
     REXLOG_INFO("TabletennisApp::OnPreSetup - GPU plugin: {}, protect_zero: false", config.gpu_plugin);
+  }
+
+  std::unique_ptr<rex::ui::AchievementNotificationDialog> CreateAchievementNotificationDialog()
+      override {
+    if (!imgui_drawer() || !immediate_drawer() || !runtime()) {
+      return nullptr;
+    }
+    return std::make_unique<OnDemandToastDialog>(app_context(), imgui_drawer(), immediate_drawer(),
+                                                 runtime());
   }
 
   void OnPostLoadXexImage() override {
@@ -292,19 +338,21 @@ class TabletennisApp : public rex::ReXApp {
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     imgui_drawer_ = drawer;
     if (drawer) {
-      fps_overlay_ = std::make_unique<FpsOverlayDialog>(drawer, loading_font_);
-      bool initial_visible = REXCVAR_GET(show_fps);
-      fps_overlay_->SetVisible(initial_visible);
-      fps_overlay_->Attach();
-      REXLOG_INFO("TabletennisApp: FPS overlay created (initial state: {})", initial_visible ? "ON" : "OFF");
+      startup_dialog_ = std::make_unique<StartupDialog>(drawer, loading_font_);
+    }
+    if (REXCVAR_GET(show_fps) && window()) {
+      tabletennis::stats_window::Show(window()->GetNativeWindowHandle());
     }
 
     // Hotkey F10 toggles FPS overlay during gameplay
     rex::ui::RegisterBind("bind_toggle_fps", "F10", "Toggle In-Game FPS Counter", [this] {
-      if (fps_overlay_) {
-        fps_overlay_->Toggle();
-        REXLOG_INFO("FPS counter toggled via F10: {}", fps_overlay_->IsVisible() ? "ON" : "OFF");
+      if (tabletennis::stats_window::IsVisible()) {
+        tabletennis::stats_window::Hide();
+      } else if (window()) {
+        tabletennis::stats_window::Show(window()->GetNativeWindowHandle());
       }
+      REXLOG_INFO("FPS overlay toggled via F10: {}",
+                  tabletennis::stats_window::IsVisible() ? "ON" : "OFF");
     });
 
     // Hotkey ESC quits game cleanly to Windows
@@ -321,6 +369,10 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
+    REXLOG_INFO("Tabletennis: loaded GPU timing flags: vsync={}, tearing={}",
+                rex::cvar::GetFlagByName("vsync"),
+                rex::cvar::GetFlagByName("d3d12_allow_variable_refresh_rate_and_tearing"));
+    tabletennis::pacing::InstallPresentHook();
     tabletennis::intro::Install();
     REXLOG_INFO("TabletennisApp::OnPostSetup - Runtime and VFS fully initialized");
   }
@@ -345,6 +397,6 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ImFont* loading_font_ = nullptr;
-  std::unique_ptr<FpsOverlayDialog> fps_overlay_;
+  std::unique_ptr<StartupDialog> startup_dialog_;
   rex::ui::ImGuiDrawer* imgui_drawer_ = nullptr;
 };

@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.7 — 2026-11-02
+
+- Integrated malinkicat's PR #6 frame-pacing work, preserving the later command-line framerate precedence fix.
+- GPU-plugin VSync now receives its setting after late registration via REX_VSYNC; all requested frame-rate options are currently paced at 60 to preserve game speed.
+- Moved the single limiter to the beginning of the guest D3D Swap, using a high-resolution waitable timer and absolute deadlines.
+- Startup and achievement dialogs attach only while needed. F10 uses a separate native statistics window with a graph instead of keeping ImGui presentation active.
+- Added optional --frame_log=true CSV logging of submission and DXGI Present-call intervals. Present calls are not physical scanout or a count of unique rendered images.
+- In a local 1280x720 comparison, 99.9% of submission intervals were within 0.5 ms of the 16.67 ms target (56.4% with v1.0.6). Occasional longer presentation intervals remain; results on other hardware/VRR modes need confirmation.
+- Hardened the measurement hook's interface query, added deterministic scheduling checks and corrected the installer log's version banner.
+
+This preview improves measured 60 FPS pacing. It does not unlock 120/144/240 FPS motion or add ultrawide support.
+
 ## v1.0.6 â€” 2026-11-02
 
 - Removed the custom sleep/spin limiter from the UI draw callback. It could delay new game output independently of the guest frame producer.

@@ -1,31 +1,18 @@
-#include "frame_pacing.h"
+#include "frame_schedule.h"
 #include <cassert>
-#include <cmath>
-using namespace tabletennis::frames;
 int main() {
-  Schedule schedule;
-  auto start = Clock::time_point{} + std::chrono::seconds(1);
-  auto period = std::chrono::nanoseconds(1'000'000'000LL / 120);
-  assert(schedule.Next(start, 120) == start);
-  // Small scheduler overshoot must not shift all following frame deadlines.
-  assert(schedule.Next(start + period + std::chrono::microseconds(50), 120) ==
-         start + period + std::chrono::microseconds(50));
-  assert(schedule.Next(start + period + std::chrono::milliseconds(1), 120) == start + 2 * period);
-  auto stall = start + std::chrono::seconds(2);
-  assert(schedule.Next(stall, 120) == stall);
-  assert(schedule.Next(stall, 120) == stall + period);
-  assert(schedule.Next(stall, 0) == stall);
-  assert(schedule.Next(stall, 60) == stall);
-  Statistics stats;
-  assert(stats.Read(start).fps == 0);
-  for (int i = 0; i <= 120; ++i) stats.Record(start + i * period);
-  auto sample = stats.Read(start + 120 * period);
-  assert(sample.intervals == 120);
-  assert(std::abs(sample.fps - 120) < .001);
-  assert(std::abs(sample.p95_ms - 1000.0 / 120) < .001);
-  assert(stats.Read(start + std::chrono::seconds(4)).fps == 0);
-  stats.Record(start + 120 * period + std::chrono::milliseconds(50));
-  sample = stats.Read(start + 120 * period + std::chrono::milliseconds(50));
-  assert(std::abs(sample.max_ms - 50) < .001);
-  assert(sample.fps < 120);
+  using tabletennis::pacing::Schedule;
+  constexpr int64_t period = 1'000'000'000LL / 60;
+  Schedule s;
+  assert(s.Next(0, 60) == period);
+  assert(s.Next(period + 100'000, 60) == 2 * period);
+  // CPU work and small wake overshoot don't accumulate drift.
+  for (int64_t i = 3; i < 1000; ++i)
+    assert(s.Next((i - 1) * period + (i % 5) * 100'000, 60) == i * period);
+  const int64_t stall = 2000 * period;
+  assert(s.Next(stall, 60) == stall + period);
+  assert(s.Next(stall + period, 60) == stall + 2 * period);
+  assert(s.Next(stall + 2 * period, 120) == stall + 2 * period + 1'000'000'000LL / 120);
+  assert(s.Next(stall + 3 * period, 0) == stall + 3 * period);
+  assert(s.Next(stall + 4 * period, 60) == stall + 5 * period);
 }

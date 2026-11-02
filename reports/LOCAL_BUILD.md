@@ -53,7 +53,7 @@ retail archives are not part of the source allowlist.
 4. Extract only default.xex and assets/resource/flash/flash.rpf into ignored local
    folders. Check the original archive/movie hashes before applying menu changes.
 5. Generate C++ from the user's XEX with the supported SDK and function metadata.
-6. Apply 17 verified native edit rules (16 functions plus the SDK-derived PCH).
+6. Apply 18 verified native edit rules (17 functions plus the SDK-derived PCH).
    Rules contain hashes, positions and replacement text, not original bodies.
    Each rule recognizes both supported clean and patched output.
 7. Configure and compile the local game. Compile the project-authored launcher,
@@ -212,3 +212,34 @@ Public source packaging and a fresh local compilation are checked separately.
 The ISO, generated source and resulting executable must not be added to Git or
 the release ZIP. Old Git objects/release assets require separate cleanup; an
 ignore rule or a new commit does not erase them.
+
+
+### v1.0.7 PR #6 integration
+
+Integrated malinkicat's 60 FPS pacing PR with current main. Command-line framerate
+precedence is retained. The old unused limiter/statistics header is replaced by
+the PR limiter and a pure, deterministically tested scheduling helper. The DXGI
+Present1 measurement hook queries IDXGISwapChain1 before accessing its vtable.
+The interface-sharing hook is best-effort telemetry, not physical scanout data.
+
+On an i5-13400F / RTX 4070 Ti, two 45-second 1280x720 Exhibition windows gave
+56.44% (v1.0.6) and 99.85% (PR) of submission intervals within +/-0.5 ms of
+16.667 ms. Submission p99 improved from 18.030 to 16.844 ms. These measurements
+use different submission hook positions and are not deterministic frame replays.
+With F10 visible, about 28 seconds gave 54.00% and 100.00%, respectively.
+The baseline sent about 300 Present calls/s including repeated images, versus
+about 60 with the PR. Present calls are not unique game images. Three PR Present
+intervals exceeded 25 ms in the off segment (max 29.056 ms), so stutter is not
+claimed eliminated. Fullscreen/VRR/other hardware need external validation.
+
+The integrated installer and source package are preview artifacts. All requested
+frame-rate choices currently remain paced at 60; no high-FPS or ultrawide claim
+is made. Original-derived files stay local and outside the source allowlist.
+
+Integration validation: the reviewed 40-file source ZIP was extracted into the
+isolated installation and its setup backend rebuilt the game with the verified
+retail ISO and existing SDK/compiler. All 18 native edits verified. All 11 checks
+passed, including compiled schedule checks, direct/saved-ISO startup, command-line
+framerate precedence and effective late-loaded VSync/tearing values. The installer
+was compiled at version 1.0.7.0; its embedded ZIP hash matched the reviewed source.
+This does not validate automatic prerequisite installation on a clean machine.

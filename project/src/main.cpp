@@ -2,37 +2,20 @@
 
 #include "generated/default/tabletennis_init.h"
 #include <rex/cvar.h>
-#include "frame_pacing.h"
-#include <chrono>
-#include <thread>
-#if defined(_M_X64) || defined(__x86_64__)
-#include <immintrin.h>
-#endif
-
 #include "tabletennis_app.h"
 
 REXCVAR_DEFINE_BOOL(show_fps, false, "UI", "Show in-game FPS counter");
 REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 144, 240, 0=unlimited)");
+REXCVAR_DEFINE_BOOL(frame_log, false, "Video", "Write every game frame and present time to frametimes.csv next to the executable");
+REXCVAR_DEFINE_BOOL(allow_tearing, true, "Video", "Present without waiting for display refresh. Off can drop the game below 60 FPS: a blocked present stalls GPU emulation");
 
 #undef __imp__VdSwap
 extern "C" REX_FUNC(__imp__VdSwap);
 
 extern "C" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base) {
-  tabletennis::frames::BeforeSubmit(REXCVAR_GET(framerate));
-  // Count guest submissions, never ImGui redraws or duplicate host presents.
+  // Frame pacing happens at the start of the D3D Swap that calls this
+  // (tabletennis::pacing::BeforeSwap).
   __imp__VdSwap(ctx, base);
-  const auto now = tabletennis::frames::Clock::now();
-  tabletennis::frames::submissions.Record(now);
-  static std::mutex log_mutex;
-  std::unique_lock log_lock(log_mutex, std::try_to_lock);
-  if (!log_lock.owns_lock()) return;
-  static auto next_log = now + std::chrono::seconds(2);
-  if (now >= next_log) {
-    next_log = now + std::chrono::seconds(2);
-    const auto stats = tabletennis::frames::submissions.Read(now);
-    REXLOG_INFO("Game submissions: {:.1f} FPS, mean {:.2f} ms, p95 {:.2f} ms, max {:.2f} ms ({} intervals)",
-                stats.fps, stats.mean_ms, stats.p95_ms, stats.max_ms, stats.intervals);
-  }
 }
 
 extern "C" void __imp__Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base) {

@@ -1,12 +1,12 @@
 # Rockstar Games presents Table Tennis — Windows PC Recompilation
 
-Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **60 FPS / VSync is recommended. Actual 120/144/240 FPS gameplay is not unlocked.**
+Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **Gameplay is currently paced at 60 FPS in every mode. Actual 120/144/240 FPS gameplay is not unlocked.**
 
 Build and play from **your own Xbox 360 disc image**. A graphical installer prepares the required components and creates the local game build for you.
 
 ## Get started
 
-1. Download **[Install-Table-Tennis.exe — installer preview](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.0.6/Install-Table-Tennis.exe)**.
+1. Download **[Install-Table-Tennis.exe — installer preview](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.0.7/Install-Table-Tennis.exe)**.
 2. Open it, choose your retail **Table Tennis ISO**, allow the required components, and click **Install**.
 3. When it says **Ready to play**, click **Play**. A desktop shortcut is also created when Windows permits it.
 
@@ -41,9 +41,9 @@ The 1440p and 4K presets raise the internal rendering scale as well as the outpu
 
 ### High-refresh display options
 
-Use **60 FPS / VSync** for normal play. The retained 120/144/240 caps and no-cap option are explicitly **experimental**: they disable VSync and permit tearing, but do not unlock the game's roughly 60 FPS motion. They may look less even on your display. Earlier claims that these options provided smooth 120–240 FPS gameplay were not supported by the counter used at the time.
+Use **60 FPS** for normal play. Retained 120/144/240/no-cap selections are currently paced at 60 as well, preserving normal game speed until game-timer changes are independently verified. Guest VSync is disabled through the late-loaded GPU plugin, and the single host limiter controls submission timing. Tearing is allowed by default; this can reduce blocking in GPU emulation but visible tearing depends on the display configuration.
 
-F10 now measures the rate of guest `VdSwap` submissions and their mean, p95 and maximum intervals. It shows UI redraw frequency separately. Submission rate is not proof of unique completed GPU images or simulation updates; the interval is not GPU render time. Genuine high-FPS motion requires further game-specific work. On fixed-refresh displays, 60 FPS cadence is best matched by a 60 Hz display mode or an integer multiple such as 120 Hz; experimental caps cannot make 60 unique images divide evenly across 144 Hz.
+F10 opens a separate native statistics window with submission rate, average/p99/worst intervals and a frame-time graph. DXGI Present-call intervals are shown separately. These measure host calls, not physical scanout, GPU render duration or a guarantee of unique completed images. Earlier high-FPS claims based on ImGui redraw counts were unsupported. On a fixed-refresh display, a 60 Hz mode or integer multiple such as 120 Hz matches 60 FPS cadence more evenly than 144 Hz.
 
 ### Image filters and anti-aliasing
 
@@ -54,7 +54,7 @@ F10 now measures the rate of guest `VdSwap` submissions and their mean, p95 and 
 ### A more convenient PC experience
 
 - **Graphical settings launcher:** choose your ISO, resolution, framerate, display mode and image filters in one place; settings are saved for the next launch.
-- **Game submission timing:** toggle **F10** for submission rate and mean/p95/max intervals, with UI redraws shown separately. A hidden counter detaches from the presentation path.
+- **Separate FPS/timing window:** toggle **F10** for submission rate, average/p99/worst intervals and a frame-time graph. DXGI Present-call timings are shown separately; they do not measure physical scanout. Use **--frame_log=true** to write `dist/frametimes.csv`.
 - **Quick exit:** press **Escape** to return to Windows.
 - **SDL3 gamepad support**, with controller detection active before the startup intro.
 
@@ -66,9 +66,9 @@ F10 now measures the rate of guest `VdSwap` submissions and their mean, p95 and 
 
 ## If installation stops
 
-**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.0.6 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
+**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.0.7 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
 
-**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.0.6 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
+**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.0.7 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
 
 Click **Open log** in the installer. You can retry after fixing the reported issue; downloaded components are cached. If Windows security blocks a required component, installation stops and security settings remain unchanged.
 
@@ -87,7 +87,7 @@ Locally generated files stay under the installation folder. Do not upload `dist`
 <details>
 <summary>Developer / advanced installation</summary>
 
-The **Table-Tennis-Local-Build-v1.0.6.zip** asset is the source package for developers. It is not required by players using the installer.
+The **Table-Tennis-Local-Build-v1.0.7.zip** asset is the source package for developers. It is not required by players using the installer.
 
 For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
@@ -103,7 +103,7 @@ Checks and source packaging:
 py -3 -m unittest discover -s tests -v
 py -3 project/tools/package_source.py --audit-index
 py -3 project/tools/package_source.py --output 'E:\ReleaseOutput'
-powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Local-Build-v1.0.6.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
+powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Local-Build-v1.0.7.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
 ```
 
 The installer builder validates every embedded source file against the public allowlist before compilation. It rejects extra or altered payload files. Native patch rules store offsets, hashes and replacement text rather than removed original function bodies. See [implementation and validation](reports/LOCAL_BUILD.md) and [changelog](CHANGELOG.md).
