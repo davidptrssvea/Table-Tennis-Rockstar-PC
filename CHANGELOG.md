@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - late-frame recovery
+
+- Submit overdue frames immediately and rebase the next deadline. This avoids adding a full frame of waiting after long stalls or producing short catch-up intervals afterward.
+- Add deterministic regressions for overdue frames and recovery. This improves stall recovery; it does not eliminate the original game/driver/OS stalls or unlock higher frame rates.
+
 ## v1.1.1 - 2026-11-02
 
 - Capitalized the final main-menu item as QUIT TO DESKTOP; it remains below EXTRAS.

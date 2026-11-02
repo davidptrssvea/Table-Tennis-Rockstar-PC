@@ -289,3 +289,36 @@ changing only the authored label bytes, then reproduced from the original retail
 archive through the public patcher. Reapplying the patch is idempotent. The
 uppercase label and last position were checked in the running game. Nine routine
 checks passed; the three unchanged native/runtime checks were not repeated.
+
+### Unreleased: late-frame recovery (2026-11-02)
+
+Schedule::Next now returns the current time when an existing deadline has been
+missed, and uses that time as the next deadline's origin. Small wake overshoots
+retain the absolute cadence; work that exhausts the frame budget does not cause
+short catch-up frames. Long stalls no longer add a full extra period of waiting.
+Native regression tests cover both cases. All 12 checks passed with native and
+retail-ISO startup tests enabled; all 23 generated edits verified unchanged.
+The rebuilt local game contains the original production intro/input code.
+
+An asynchronous telemetry experiment was tested and then excluded from the
+production change because the measurements did not demonstrate a consistent
+pacing benefit. That experiment and raw captures remain private. Older scripted
+measurements opened a replay-control file on the guest thread, which can itself
+stall; a repeat comparison read that file on a separate private control thread
+and only loaded an atomic button mask on the guest thread. Neither replay path
+is part of the distributed source or production executable.
+
+In roughly 48-second, windowed 1280x720 Exhibition samples (Liu Ping vs Haley,
+National TT Auditorium, 60 FPS, optional CSV enabled, F10 hidden), the clean
+v1.1.1 baseline recorded game p99/max 16.667/16.739 ms and Present p99/max
+16.873/18.258 ms. The deadline+telemetry experiment recorded game p99/max
+16.669/22.323 ms and Present p99/max 17.168/29.464 ms. Thus these samples do NOT
+establish reduced overall stutter, and not all prior spikes can be attributed
+to the application. They are submission/Present timings, not physical scanout.
+
+Recovery behavior was confirmed: an old 21.388 ms game interval was followed
+by an 11.946 ms catch-up interval; the experiment's 22.323 ms interval was
+followed by 16.666 ms. Deterministic tests verify that this comes from the
+retained deadline correction. The original causes of late work, shader/loading,
+OS scheduling and GPU-driver stalls are not claimed eliminated. No new public
+release is part of this development change.
