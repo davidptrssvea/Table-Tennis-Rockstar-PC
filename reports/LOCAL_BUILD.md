@@ -100,6 +100,17 @@ Updated scratch/community-feature-test/dist/tabletennis.exe only. The existing
 private ZIP remains unchanged and requires this replacement EXE on both PCs.
 The user's running relay was left running; only the isolated test relay stopped.
 
+Client-start report follow-up: host log tabletennis_007.log showed Sebbe joining
+and then disappearing, without a host-side fatal error. Client crash log/build
+confirmation is still required to diagnose that physical-PC failure.
+Repeated the complete flow with two isolated instances of the corrected build:
+HostLatest created the room, ClientLatest joined, host started the match, and both
+entered pongGameState at 21:43:58 on 2026-11-03. The client displayed the court,
+both names and score HUD; score progression was visible on the host. Neither
+process crashed. This is a same-PC loopback test, not proof that the separate-PC
+client failure is resolved. No new code change was made for that unconfirmed
+failure. The isolated processes and test relay were stopped afterward.
+
 ## v1.0.2 graphical installer
 
 The public `Install-Table-Tennis.exe` is compiled from `project/installer/Installer.cs`
