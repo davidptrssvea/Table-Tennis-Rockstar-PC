@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -458,6 +459,34 @@ namespace TableTennisLauncher
             return "";
         }
 
+        private static bool ValidServer(string value) {
+            var match = Regex.Match(value, @"\A[A-Za-z0-9.-]+(?::([0-9]{1,5}))?\z");
+            if (!match.Success) return false;
+            if (!match.Groups[1].Success) return true;
+            int port;
+            return int.TryParse(match.Groups[1].Value, out port) && port >= 1 && port <= 65535;
+        }
+
+        private static bool ValidRoom(string value) {
+            return value.Length == 0 || Regex.IsMatch(value, @"\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}\z");
+        }
+
+        private string OnlineBuildId() {
+            try {
+                using (var hash = SHA256.Create()) {
+                    byte[] buffer = new byte[65536];
+                    foreach (string name in new[]{"tabletennis.exe", "rexruntime.dll", "rexgpu-xenos.dll"})
+                        using (var input = File.OpenRead(Path.Combine(distDir, name))) {
+                            int count;
+                            while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
+                                hash.TransformBlock(buffer, 0, count, buffer, 0);
+                        }
+                    hash.TransformFinalBlock(new byte[0], 0, 0);
+                    return BitConverter.ToString(hash.Hash).Replace("-", "").Substring(0,12);
+                }
+            } catch { return "unavailable"; }
+        }
+
         private void AddOnlineHelp(StackPanel parent) {
             var box = new StackPanel { Margin = new Thickness(0,6,0,12) };
             box.Children.Add(new TextBlock {
@@ -473,6 +502,7 @@ namespace TableTennisLauncher
                 FontSize = 11, Margin = new Thickness(0,6,0,8) });
             var root = Path.GetDirectoryName(distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             string python = Path.Combine(root, "tools", "python", "python.exe");
+            if (!File.Exists(python)) python = Path.Combine(root, ".tools", "python314", "python.exe");
             string server = Path.Combine(root, "server", "ttlink_server.py");
             bool bundled = File.Exists(python) && File.Exists(server);
             string address = LocalServerAddress();
@@ -489,8 +519,23 @@ namespace TableTennisLauncher
             };
             start.Click += (sender, args) => {
                 try {
-                    Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port 27360") {
+                    foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners())
+                        if (endpoint.Port == 27360) {
+                            status.Text = "UDP port 27360 is already in use. If your server window is already open, keep it open and use the address below.";
+                            return;
+                        }
+                    var process = Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port 27360") {
                         WorkingDirectory = root, UseShellExecute = true });
+                    if (process == null) throw new InvalidOperationException("Windows did not start the server.");
+                    start.IsEnabled = false;
+                    process.Exited += (source, eventArgs) => {
+                        if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(() => {
+                            start.IsEnabled = true;
+                            status.Text = "The server window closed. Start it again before hosting a match.";
+                        }));
+                        process.Dispose();
+                    };
+                    process.EnableRaisingEvents = true;
                     chkNetwork.IsChecked = true;
                     if (address.Length != 0) txtServer.Text = address;
                     status.Text = "Server start requested. Keep its window open; it should say 'listening'. " +
@@ -513,6 +558,20 @@ namespace TableTennisLauncher
                 TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray, FontSize = 11,
                 Margin = new Thickness(0,6,0,0) });
             box.Children.Add(status);
+            box.Children.Add(new TextBlock {
+                Text = "Online build ID: " + OnlineBuildId() + ". Use the same build on BOTH PCs.",
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray, FontSize = 11,
+                Margin = new Thickness(0,7,0,0) });
+            var logs = new Button { Content = "Open game logs", HorizontalAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(10,4,10,4), Margin = new Thickness(0,6,0,0) };
+            logs.Click += (sender, args) => {
+                try {
+                    string directory = Path.Combine(distDir, "logs");
+                    Directory.CreateDirectory(directory);
+                    Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+                } catch (Exception ex) { status.Text = "Could not open logs: " + ex.Message; }
+            };
+            box.Children.Add(logs);
             parent.Children.Add(box);
         }
 
@@ -675,10 +734,10 @@ namespace TableTennisLauncher
             }
 
             if (chkNetwork.IsChecked == true &&
-                (!Regex.IsMatch(txtServer.Text.Trim(), @"^[A-Za-z0-9.-]+(:[0-9]{1,5})?$") ||
+                (!ValidServer(txtServer.Text.Trim()) ||
                  !Regex.IsMatch(txtPlayer.Text.Trim(), @"^[A-Za-z0-9 _-]{1,15}$") ||
-                 (txtRoom.Text.Trim().Length != 0 && !Regex.IsMatch(txtRoom.Text.Trim().ToUpperInvariant(), @"^[A-HJ-NP-Z2-9]{6}$")))) {
-                MessageBox.Show("Enter a server host (optionally :port), a player name (1-15 letters/numbers/spaces), and either no room code or a valid 6-character code.", "Online settings", MessageBoxButton.OK, MessageBoxImage.Information);
+                 !ValidRoom(txtRoom.Text.Trim().ToUpperInvariant()))) {
+                MessageBox.Show("Enter a server host (optional port: 1-65535), a player name (1-15 letters/numbers/spaces), and either no room code or exactly 6 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789. Example: ABC234.", "Online settings", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             SaveSettings();

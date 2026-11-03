@@ -24,6 +24,7 @@ FIXED_FILES = {
     'project/sdk-patches/0001-community-windows.patch',
     'server/ttlink_server.py', 'server/README.md',
     'tests/test_community_network.py', 'tests/community_network_probe.cpp',
+    'tests/test_online_validation.py',
     'project/src/screen_layout.h', 'tests/pc_features_test.cpp',
     'project/src/stats_window.cpp', 'project/src/stats_window.h',
     'project/sdk-overrides/rex/platform/fpscr.h', 'project/sdk-overrides/rex/ppc/context.h',
@@ -32,6 +33,7 @@ FIXED_FILES = {
     'project/tools/native_edits.json', 'project/tools/setup_build.py', 'project/tools/package_source.py',
     'tests/test_local_build.py', 'licenses/ReXGlue/LICENSE.txt', 'licenses/SDL3/LICENSE.txt',
     'reports/LOCAL_BUILD.md',
+    'reports/ONLINE_REVIEW.md',
     'project/installer/Installer.cs', 'project/tools/bootstrap.ps1', 'project/tools/build_installer.ps1',
 }
 

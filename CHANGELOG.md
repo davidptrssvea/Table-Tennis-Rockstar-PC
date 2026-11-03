@@ -2,6 +2,15 @@
 
 ## Unreleased - community Windows integration
 
+- Harden Windows networking: preserve native socket width, serialize delayed
+  sends with socket lifetime, discard old-room queues and validate socket setup.
+- Keep the Windows Python relay receiving after a departing UDP peer triggers
+  ICMP errors. Add delayed/room-switch/closed-port/server-restart regressions.
+- Align room/port validation, bound relay input state, preserve UTF-8 names and
+  validate incoming protocol messages before updating connection state.
+- Show an online build ID covering game/engine files and add Open game logs;
+  recognize installer Python and prevent duplicate relay launches.
+
 - Fix the local test build's CREATE MATCH crash: regeneration had used an older
   overrides file and omitted 22 network callbacks. Verify all required override
   registrations before native patching so stale generated code fails the build.

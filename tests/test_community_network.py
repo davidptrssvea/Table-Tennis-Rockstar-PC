@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,19 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'project/tools'))
 import setup_build
+
+
+def loopback_port():
+    for _ in range(100):
+        with socket.socket() as tcp, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+            udp.bind(('127.0.0.1', 0))
+            port = udp.getsockname()[1]
+            try:
+                tcp.bind(('127.0.0.1', port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError('No free shared TCP/UDP loopback port')
 
 
 @unittest.skipUnless(sys.platform == 'win32' and os.environ.get('TABLETENNIS_TEST_COMMUNITY_SDK'),
@@ -58,15 +72,18 @@ target_link_libraries(network_probe PRIVATE rex::runtime ws2_32)
                 with urllib.request.urlopen(f'http://127.0.0.1:{port}/status', timeout=.2):
                     return process
             except OSError:
+                if process.poll() is not None:
+                    break
                 time.sleep(.1)
-        process.terminate()
+        if process.poll() is None:
+            process.terminate()
         process.wait(timeout=5)
-        self.fail('Loopback server failed to start')
+        log.flush()
+        self.fail('Loopback server failed to start: ' + Path(log.name).read_text(errors='replace'))
 
     def exercise(self, mode):
-        with socket.socket() as listener:
-            listener.bind(('127.0.0.1', 0))
-            port = listener.getsockname()[1]
+        # TCP and UDP have separate availability/exclusion rules on Windows.
+        port = loopback_port()
         with tempfile.TemporaryDirectory(dir=self.folder) as directory:
             folder = Path(directory)
             children = []
@@ -104,6 +121,13 @@ target_link_libraries(network_probe PRIVATE rex::runtime ws2_32)
                         if child.poll() is None:
                             child.terminate()
                         child.wait(timeout=5)
+                    if os.environ.get('TABLETENNIS_TEST_LOG_DIR'):
+                        for log in (server_log, a_log, b_log):
+                            log.flush()
+                        target = Path(os.environ['TABLETENNIS_TEST_LOG_DIR']) / mode
+                        target.mkdir(parents=True, exist_ok=True)
+                        for name in ('server.log', 'a.log', 'b.log'):
+                            shutil.copy2(folder / name, target / name)
 
     def test_direct_peer_names_and_ping(self):
         self.exercise('direct')
@@ -116,3 +140,45 @@ target_link_libraries(network_probe PRIVATE rex::runtime ws2_32)
 
     def test_clients_rejoin_after_server_restart(self):
         self.exercise('reconnect')
+
+    def test_delayed_transport(self):
+        self.exercise('delay')
+
+    def test_room_switch_with_delayed_packets(self):
+        self.exercise('switch')
+
+    def test_invalid_server_ports_are_rejected(self):
+        for address in ('127.0.0.1:0', '127.0.0.1:65536', '127.0.0.1:27360junk'):
+            result = subprocess.run([str(self.exe), address, 'PortTest', 'ABC234', 'invalid'],
+                                    capture_output=True, text=True, timeout=8)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_server_keeps_receiving_after_udp_peer_closes(self):
+        port = loopback_port()
+        def hello(name, nonce):
+            name = name.encode('ascii')
+            return (b'TTV1\x01' + struct.pack('>BQ', 1, nonce) + bytes([len(name)]) + name +
+                    b'\x06ABC234' + struct.pack('>IHh', 0x7F000001, 11000, 60))
+        with tempfile.TemporaryDirectory(dir=self.folder) as folder:
+            with (Path(folder) / 'server.log').open('w') as log:
+                process = self.start_server(port, log)
+                try:
+                    for i in range(3):
+                        # Replies to this closed port generate Windows ICMP errors.
+                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as dead:
+                            dead.bind(('127.0.0.1', 0))
+                            dead.sendto(hello('Gone' + str(i), i + 1), ('127.0.0.1', port))
+                        time.sleep(.15)
+                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as live:
+                            live.bind(('127.0.0.1', 0))
+                            live.settimeout(2)
+                            live.sendto(hello('Live' + str(i), i + 10), ('127.0.0.1', port))
+                            packet, _ = live.recvfrom(2048)
+                            self.assertEqual(packet[:5], b'TTV1\x02')
+                            cid, _, token = struct.unpack_from('>IIQ', packet, 5)
+                            live.sendto(b'TTV1\x08' + struct.pack('>IQ', cid, token),
+                                        ('127.0.0.1', port))
+                        time.sleep(.1)
+                finally:
+                    process.terminate()
+                    process.wait(timeout=5)

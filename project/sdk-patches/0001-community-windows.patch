@@ -1216,7 +1216,7 @@ index a77f5e6..5b78a8a 100644
    // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=gfwl+live&start=195
    // https://github.com/arkem/py360/blob/master/py360/constants.py
 diff --git a/src/system/xsocket.cpp b/src/system/xsocket.cpp
-index 2d13ac8..c80213b 100644
+index 2d13ac8..ec5abf3 100644
 --- a/src/system/xsocket.cpp
 +++ b/src/system/xsocket.cpp
 @@ -9,7 +9,20 @@
@@ -1250,7 +1250,7 @@ index 2d13ac8..c80213b 100644
  #include <rex/net/socket.h>
  
  // Standard socket types used by Xbox API emulation
-@@ -24,21 +40,1357 @@
+@@ -24,21 +40,1410 @@
  #include <WinSock2.h>
  
  #include <WS2tcpip.h>
@@ -1784,6 +1784,7 @@ index 2d13ac8..c80213b 100644
 +    sockaddr_in direct_addr{};
 +    bool direct = false;
 +    OnlineClock::time_point seen;           // first listed
++    OnlineClock::time_point last_listed{};
 +    OnlineClock::time_point last_punch{};
 +    OnlineClock::time_point last_direct{};  // last packet received directly
 +    OnlineClock::time_point last_game{};    // last match datagram the title sent to it
@@ -1914,6 +1915,7 @@ index 2d13ac8..c80213b 100644
 +    OnlineClock::time_point due;
 +    sockaddr_in to;
 +    std::vector<uint8_t> data;
++    uint64_t generation;
 +  };
 +  std::mutex delay_mutex_;
 +  std::condition_variable delay_cv_;
@@ -1934,9 +1936,16 @@ index 2d13ac8..c80213b 100644
 +      }
 +      Delayed next = std::move(delayed_.front());
 +      delayed_.pop_front();
-+      const auto fd = fd_;
 +      lock.unlock();
-+      WireSend(fd, next.to, next.data);
++      {
++        // Socket lifetime belongs to mutex_, not delay_mutex_. A room change
++        // must not send queued packets through a closed or newly reused socket.
++        std::lock_guard<std::mutex> socket_lock(mutex_);
++        if (next.data.size() >= 5 && next.data[4] == kHello)
++          REXKRNL_DEBUG("Online: delayed HELLO generation {} (current {}), socket {}",
++                        next.generation, socket_generation_, fd_);
++        if (next.generation == socket_generation_) WireSend(fd_, next.to, next.data);
++      }
 +      lock.lock();
 +    }
 +  }
@@ -1952,6 +1961,9 @@ index 2d13ac8..c80213b 100644
 +    const int loss = REXCVAR_GET(online_test_loss_percent);
 +    if (loss > 0 && int(std::random_device{}() % 100) < loss) return;
 +    const int delay = std::max(0, REXCVAR_GET(online_test_delay_ms)) + extra_ms;
++    if (data.size() >= 5 && data[4] == kHello)
++      REXKRNL_DEBUG("Online: queue HELLO generation {}, socket {}, delay {} ms",
++                    socket_generation_, fd_, delay);
 +    if (delay > 0) {
 +      std::lock_guard<std::mutex> lock(delay_mutex_);
 +      if (!delay_thread_) {
@@ -1962,7 +1974,8 @@ index 2d13ac8..c80213b 100644
 +      const auto due = OnlineClock::now() + std::chrono::milliseconds(delay);
 +      auto it = delayed_.end();
 +      while (it != delayed_.begin() && std::prev(it)->due > due) --it;
-+      delayed_.insert(it, {due, to, data});
++      if (delayed_.size() >= 4096) return;
++      delayed_.insert(it, {due, to, data, socket_generation_});
 +      delay_cv_.notify_one();
 +      return;
 +    }
@@ -1991,10 +2004,17 @@ index 2d13ac8..c80213b 100644
 +  std::mutex burst_mutex_;
 +  OnlineClock::time_point burst_period_end_{}, burst_start_{}, burst_end_{};
 +
-+  void WireSend(int fd, const sockaddr_in& to, const std::vector<uint8_t>& data) {
++  void WireSend(rex::net::SocketHandle fd, const sockaddr_in& to, const std::vector<uint8_t>& data) {
 +    if (fd < 0 || InTestBurst()) return;
-+    sendto(fd, reinterpret_cast<const char*>(data.data()), data.size(), 0,
-+           reinterpret_cast<const sockaddr*>(&to), sizeof(to));
++    const int sent = sendto(fd, reinterpret_cast<const char*>(data.data()), int(data.size()), 0,
++                           reinterpret_cast<const sockaddr*>(&to), sizeof(to));
++    if (data.size() >= 5 && data[4] == kHello)
++      REXKRNL_DEBUG("Online: HELLO send result {} to {}:{}", sent,
++                    FormatAddress(ntohl(to.sin_addr.s_addr)), ntohs(to.sin_port));
++    if (sent < 0 && OnlineClock::now() - last_send_error_ > std::chrono::seconds(2)) {
++      last_send_error_ = OnlineClock::now();
++      REXKRNL_WARN("Online: UDP send failed (socket {}, error {})", fd, LastError());
++    }
 +  }
 +
 +  // Reads the online_server setting; false when none is set or it cannot be resolved.
@@ -2004,9 +2024,15 @@ index 2d13ac8..c80213b 100644
 +    uint16_t port = kDefaultServerPort;
 +    const size_t colon = text.rfind(':');
 +    if (colon != std::string::npos) {
-+      port = uint16_t(std::atoi(text.c_str() + colon + 1));
++      const std::string digits = text.substr(colon + 1);
++      if (digits.empty() || digits.size() > 5 ||
++          digits.find_first_not_of("0123456789") != std::string::npos) return false;
++      const unsigned long parsed = std::strtoul(digits.c_str(), nullptr, 10);
++      if (!parsed || parsed > 65535) return false;
++      port = uint16_t(parsed);
 +      text.resize(colon);
 +    }
++    if (text.empty()) return false;
 +    addrinfo hints{};
 +    hints.ai_family = AF_INET;
 +    hints.ai_socktype = SOCK_DGRAM;
@@ -2024,11 +2050,13 @@ index 2d13ac8..c80213b 100644
 +        Writer w(kBye);
 +        w.u32(id_);
 +        w.u64(token_);
-+        SendRaw(server_, w.data);
++        WireSend(fd_, server_, w.data); // Do not leave BYE in a queue we are about to discard.
 +      }
 +      rex::net::socket_close(fd_);
 +    }
 +    fd_ = -1;
++    ++socket_generation_;
++    { std::lock_guard<std::mutex> lock(delay_mutex_); delayed_.clear(); }
 +    welcomed_ = false;
 +    resolved_ = false;
 +    peers_.clear();
@@ -2087,14 +2115,23 @@ index 2d13ac8..c80213b 100644
 +      }
 +      if (fd_ < 0) {
 +        fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
++        bool ready = fd_ >= 0;
 +#if REX_PLATFORM_WIN32
 +        u_long nonblocking=1;
-+        ioctlsocket(fd_,FIONBIO,&nonblocking);
++        if (ready) ready = ioctlsocket(fd_,FIONBIO,&nonblocking) == 0;
 +#endif
 +        sockaddr_in local = Endpoint(BindLocalAddress() ? BaseAddress() : INADDR_ANY, 0);
-+        bind(fd_, reinterpret_cast<sockaddr*>(&local), sizeof(local));
++        if (ready) ready = bind(fd_, reinterpret_cast<sockaddr*>(&local), sizeof(local)) == 0;
 +        socklen_t len = sizeof(local);
-+        getsockname(fd_, reinterpret_cast<sockaddr*>(&local), &len);
++        if (ready) ready = getsockname(fd_, reinterpret_cast<sockaddr*>(&local), &len) == 0;
++        if (!ready) {
++          REXKRNL_WARN("Online: could not create/bind the local UDP socket");
++          Disconnect();
++          state_ = "SOCKET ERROR";
++          lock.unlock();
++          std::this_thread::sleep_for(std::chrono::seconds(1));
++          continue;
++        }
 +        local_port_ = ntohs(local.sin_port);
 +        last_server_ = now;
 +        state_ = "CONNECTING";
@@ -2114,6 +2151,11 @@ index 2d13ac8..c80213b 100644
 +        if (now - last_server_ > std::chrono::seconds(10)) state_ = "NO ANSWER FROM SERVER";
 +      }
 +      if (welcomed_) {
++        // Large rooms use multi-part MEMBERS packets, so they cannot replace
++        // peers_ atomically. Bound stale entries when members leave those rooms.
++        peers_.erase(std::remove_if(peers_.begin(), peers_.end(), [&](const Peer& peer) {
++          return now - peer.last_listed > std::chrono::seconds(35);
++        }), peers_.end());
 +        if (now - last_keepalive_ > std::chrono::seconds(3)) {
 +          last_keepalive_ = now;
 +          Writer w(kKeepAlive);
@@ -2331,13 +2373,16 @@ index 2d13ac8..c80213b 100644
 +      switch (type) {
 +        case kWelcome: {
 +          if (!from_server) return;
-+          id_ = r.u32();
-+          vip_ = r.u32();
-+          token_ = r.u64();
++          const uint32_t id = r.u32();
++          const uint32_t vip = r.u32();
++          const uint64_t token = r.u64();
 +          const std::string room = r.str();
 +          const uint32_t public_ip = r.u32();
 +          const uint16_t public_port = r.u16();
 +          if (!r.ok) return;
++          id_ = id;
++          vip_ = vip;
++          token_ = token;
 +          if (!welcomed_) {
 +            REXKRNL_INFO("Online: joined {} as {} (seen as {}:{})",
 +                         room.empty() ? "the public room" : "room " + room, FormatAddress(vip_),
@@ -2351,6 +2396,7 @@ index 2d13ac8..c80213b 100644
 +          if (!from_server || !welcomed_) return;
 +          const uint16_t total = r.u16();
 +          const uint16_t count = r.u16();
++          if (!r.ok || count > total || total > 254) return;
 +          std::vector<Peer> listed;
 +          for (uint16_t i = 0; i < count && r.ok; ++i) {
 +            Peer peer;
@@ -2374,13 +2420,16 @@ index 2d13ac8..c80213b 100644
 +          std::vector<Peer> next;
 +          for (auto& peer : listed) {
 +            auto it = std::find_if(peers_.begin(), peers_.end(),
-+                                   [&](const Peer& p) { return p.id == peer.id; });
++                                   [&](const Peer& p) { return p.id == peer.id && p.token == peer.token && p.vip == peer.vip; });
 +            if (it != peers_.end()) {
 +              it->public_addr = peer.public_addr;
 +              it->local_addr = peer.local_addr;
++              it->name = peer.name;
++              it->last_listed = OnlineClock::now();
 +              next.push_back(*it);
 +            } else {
 +              peer.seen = OnlineClock::now();
++              peer.last_listed = peer.seen;
 +              REXKRNL_INFO("Online: {} is in the room ({})", peer.name, FormatAddress(peer.vip));
 +              next.push_back(peer);
 +            }
@@ -2416,6 +2465,7 @@ index 2d13ac8..c80213b 100644
 +          if (!from_server) return;
 +          const uint8_t code = r.u8();
 +          const std::string text = r.str();
++          if (!r.ok) return;
 +          REXKRNL_WARN("Online: server says: {} ({})", text, code);
 +          if (code == 5 /* unknown client */) {
 +            welcomed_ = false;
@@ -2491,6 +2541,7 @@ index 2d13ac8..c80213b 100644
 +      }
 +    }
 +    // Hand the datagram to the title's socket bound to that port.
++    if (payload_len > kMaxOnlinePayload) return;
 +    std::lock_guard<std::mutex> lock(bound_mutex);
 +    for (auto& [port, socket] : bound_sockets) {
 +      if (port == dst_port) {
@@ -2506,6 +2557,8 @@ index 2d13ac8..c80213b 100644
 +  std::string state_ = "OFF";
 +  bool relay_only_ = false;
 +  rex::net::SocketHandle fd_ = -1;
++  uint64_t socket_generation_ = 0;
++  OnlineClock::time_point last_send_error_{};
 +  bool resolved_ = false;
 +  bool welcomed_ = false;
 +  sockaddr_in server_{};
@@ -2608,7 +2661,7 @@ index 2d13ac8..c80213b 100644
    Close();
  }
  
-@@ -48,20 +1400,35 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
+@@ -48,20 +1453,35 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
    proto_ = proto;
  
    if (proto == Protocol::X_IPPROTO_VDP) {
@@ -2647,7 +2700,7 @@ index 2d13ac8..c80213b 100644
    if (ret != 0) {
      return X_STATUS_UNSUCCESSFUL;
    }
-@@ -70,38 +1437,77 @@ X_STATUS XSocket::Close() {
+@@ -70,38 +1490,77 @@ X_STATUS XSocket::Close() {
  }
  
  X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr, uint32_t optlen) {
@@ -2747,7 +2800,7 @@ index 2d13ac8..c80213b 100644
    if (ret < 0) {
      return X_STATUS_UNSUCCESSFUL;
    }
-@@ -109,14 +1515,23 @@ X_STATUS XSocket::Connect(N_XSOCKADDR* name, int name_len) {
+@@ -109,14 +1568,23 @@ X_STATUS XSocket::Connect(N_XSOCKADDR* name, int name_len) {
    return X_STATUS_SUCCESS;
  }
  
@@ -2773,7 +2826,7 @@ index 2d13ac8..c80213b 100644
  
    return X_STATUS_SUCCESS;
  }
-@@ -130,18 +1545,16 @@ X_STATUS XSocket::Listen(int backlog) {
+@@ -130,18 +1598,16 @@ X_STATUS XSocket::Listen(int backlog) {
    return X_STATUS_SUCCESS;
  }
  
@@ -2798,7 +2851,7 @@ index 2d13ac8..c80213b 100644
  
    // Create a kernel object to represent the new socket, and copy parameters
    // over.
-@@ -157,79 +1570,202 @@ int XSocket::Shutdown(int how) {
+@@ -157,79 +1623,202 @@ int XSocket::Shutdown(int how) {
    return shutdown(native_handle_, how);
  }
  
@@ -2936,7 +2989,7 @@ index 2d13ac8..c80213b 100644
 -
 -  if (from_len) {
 -    *from_len = nfromlen;
-+  LogPacket("recv", handle(), len, source, ntohs(nfrom.sin_port), buf);
++  LogPacket("recv", handle(), copied, source, ntohs(nfrom.sin_port), buf);
 +  LogFirstContact("recv", handle(), source, ntohs(nfrom.sin_port), len);
 +  if (len > buf_len) {
 +    errno = EMSGSIZE;

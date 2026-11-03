@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import random
+import secrets
 import socket
 import struct
 import time
@@ -56,6 +57,7 @@ PACKET_RATE = 400
 BYTE_RATE = 256 * 1024
 BROADCAST_RATE = 20
 HELLO_RATE_PER_IP = 5
+MAX_HELLO_IPS = 4096
 NAME_RECLAIM = 6.0  # seconds without keepalives (sent every 3 s) before a reconnect may take a name
 
 ERR_VERSION, ERR_FULL, ERR_ROOM, ERR_LIMIT, ERR_UNKNOWN, ERR_NAME = 1, 2, 3, 4, 5, 6
@@ -190,6 +192,9 @@ class Server(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         self.transport = transport
 
+    def error_received(self, exc):
+        logging.warning("UDP transport reported an error: %s", exc)
+
     def send(self, addr, kind, body=b""):
         self.transport.sendto(MAGIC + bytes([kind]) + body, addr)
 
@@ -237,6 +242,8 @@ class Server(asyncio.DatagramProtocol):
     def on_hello(self, body, addr):
         bucket = self.hello_limits.get(addr[0])
         if bucket is None:
+            if len(self.hello_limits) >= MAX_HELLO_IPS:
+                return
             bucket = self.hello_limits[addr[0]] = Bucket(HELLO_RATE_PER_IP)
         if not bucket.take():
             return
@@ -254,7 +261,8 @@ class Server(asyncio.DatagramProtocol):
         if version not in SUPPORTED_VERSIONS:
             self.error(addr, ERR_VERSION, "this server speaks a different version; update the game")
             return
-        name = "".join(c for c in name if c.isprintable())[:15] or "Player"
+        # The wire format carries at most 15 UTF-8 bytes, not 15 Unicode chars.
+        name = "".join(c for c in name if c.isprintable()).encode("utf-8")[:15].decode("utf-8", "ignore") or "Player"
         if room and (len(room) != ROOM_LENGTH or any(c not in ROOM_ALPHABET for c in room)):
             self.error(addr, ERR_ROOM, "invalid room code")
             return
@@ -292,10 +300,10 @@ class Server(asyncio.DatagramProtocol):
             return
         free = [n for n in range(1, 255) if (VIRTUAL_NET | n) not in members]
         vip = VIRTUAL_NET | random.choice(free)
-        cid = random.getrandbits(32) or 1
+        cid = secrets.randbits(32) or 1
         while cid in self.clients:
-            cid = random.getrandbits(32) or 1
-        client = Client(cid, random.getrandbits(64), nonce, addr, name, room, vip, local_ip, local_port)
+            cid = secrets.randbits(32) or 1
+        client = Client(cid, secrets.randbits(64), nonce, addr, name, room, vip, local_ip, local_port)
         client.key = key
         if utc_offset is not None and -14 * 60 <= utc_offset <= 14 * 60:
             client.utc_offset = utc_offset
@@ -483,6 +491,15 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        if os.name == "nt" and hasattr(asyncio, "Runner"):
+            # On Windows the Proactor UDP reader in affected Python versions
+            # stops rearming after ICMP port-unreachable (a peer just left).
+            # Selector keeps listening after that recoverable datagram error.
+            with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+                runner.run(main())
+        else:
+            if os.name == "nt":  # Python 3.8-3.10 compatibility
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+            asyncio.run(main())
     except KeyboardInterrupt:
         pass

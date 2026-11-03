@@ -55,6 +55,13 @@ open while playing. The next official community release must include these tools
 that release remains pending multiplayer testing. The existing private test ZIP
 has not been rebuilt with this launcher change.
 
+The launcher now shows an **Online build ID** derived from the game and engine
+files; compare it on both PCs before reporting a multiplayer failure. **Open game
+logs** opens the folder needed for the client crash report. See the
+[Windows online review](reports/ONLINE_REVIEW.md) for hardening, test scope and
+SmartScreen/signing status. Separate-PC client crashes and Internet play remain
+under investigation; a public community release has not been published.
+
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room
 isolation and rejoining after a server restart. Internet/NAT combinations,
