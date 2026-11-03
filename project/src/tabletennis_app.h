@@ -9,6 +9,7 @@
 #include "pc_features.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
+#include "achievement_ui.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -282,8 +283,22 @@ class TabletennisApp : public rex::ReXApp {
     if (!imgui_drawer() || !immediate_drawer() || !runtime()) {
       return nullptr;
     }
-    return std::make_unique<OnDemandToastDialog>(app_context(), imgui_drawer(), immediate_drawer(),
-                                                 runtime());
+    // Game-styled unlock popup (achievement_ui.h), matching the list below. It replaces the
+    // OnDemandToastDialog above; keep that one instead if you prefer it, but note the EXTRAS >
+    // ACHIEVEMENTS redirect is driven from this popup's per-frame tick.
+    return std::make_unique<tabletennis::achievement_ui::AchievementToast>(
+        imgui_drawer(), immediate_drawer(), runtime(), &achievements(), window());
+  }
+
+  // Game-styled achievements list, shown by F7 and by the EXTRAS > ACHIEVEMENTS menu entry
+  // (achievement_ui.h). The SDK's default overlay is a plain list; this one matches the game's
+  // menus. The menu entry is redirected here by the sub_8230F770 override in achievement_ui.cpp.
+  std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override {
+    if (!imgui_drawer() || !immediate_drawer() || !runtime()) {
+      return nullptr;
+    }
+    return std::make_unique<tabletennis::achievement_ui::AchievementsPanel>(
+        imgui_drawer(), immediate_drawer(), runtime(), &achievements());
   }
 
   void OnPostLoadXexImage() override {
@@ -335,6 +350,9 @@ class TabletennisApp : public rex::ReXApp {
         break;
       }
     }
+    // Achievement popup and list faces: Noto Sans next to the executable if present, otherwise a
+    // system font, otherwise the ImGui default (the UI always works).
+    tabletennis::achievement_ui::ConfigureFonts(atlas, rex::filesystem::GetExecutableFolder() / "fonts");
   }
 
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
