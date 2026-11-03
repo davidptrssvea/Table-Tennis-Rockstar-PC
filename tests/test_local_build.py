@@ -127,7 +127,9 @@ class RuntimeIsoTests(unittest.TestCase):
         """
         dist = Path(os.environ['TABLETENNIS_TEST_DIST']).resolve(strict=True)
         iso = Path(os.environ['TABLETENNIS_TEST_ISO']).resolve(strict=True)
-        for source in ('argument', 'settings'):
+        community = (dist / 'community-engine.json').is_file()
+        sources = ('argument', 'settings', 'network-argument') if community else ('argument', 'settings')
+        for source in sources:
             with self.subTest(source=source), tempfile.TemporaryDirectory(prefix='Table Tennis ISO test ') as folder:
                 target = Path(folder)
                 for pattern in ('tabletennis.exe', '*.dll'):
@@ -135,12 +137,18 @@ class RuntimeIsoTests(unittest.TestCase):
                         shutil.copy2(path, target / path.name)
                 shutil.copytree(dist / 'assets', target / 'assets')
                 settings = f'iso_path={iso}\n' if source == 'settings' else ''
+                if community:
+                    settings += ('system_link=' + ('false' if source == 'network-argument' else 'true') +
+                                 '\nonline_server=127.0.0.1:27360\nplayer_name=SettingsUser\nroom_code=ABC234\n')
                 (target / 'settings.ini').write_text(settings + 'framerate=60\nallow_tearing=true\n', encoding='utf-8')
                 args = [str(target / 'tabletennis.exe'), '--fullscreen=false']
-                if source == 'argument':
+                if source != 'settings':
                     args.append('--game_data_root=' + str(iso))
                     # Explicit selection must win over settings.ini's 60 cap.
                     args.extend(['--framerate=144', '--allow_tearing=false'])
+                    if community:
+                        args.extend(['--system_link=' + ('true' if source == 'network-argument' else 'false'),
+                                     '--online_server=127.0.0.1:27361', '--user_name=CommandLineUser'])
                 process = subprocess.Popen(args, cwd=target.parent,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
@@ -156,11 +164,17 @@ class RuntimeIsoTests(unittest.TestCase):
                     self.assertIn('Runtime and VFS fully initialized', log, log[-6000:])
                     self.assertNotIn('--game_data_root does not exist', log)
                     self.assertIn('TabletennisOfflineMenu', log, log[-6000:])
-                    if source == 'argument':
+                    if source != 'settings':
                         self.assertIn('framerate 144 requested; pacing at 60', log)
                         self.assertIn('loaded GPU timing flags: vsync=false, tearing=false', log)
                     else:
                         self.assertIn('loaded GPU timing flags: vsync=false, tearing=true', log)
+                    if community:
+                        enabled = 'false' if source == 'argument' else 'true'
+                        endpoint = '127.0.0.1:27360' if source == 'settings' else '127.0.0.1:27361'
+                        player = 'SettingsUser' if source == 'settings' else 'CommandLineUser'
+                        self.assertIn(f'Network setup: enabled={enabled}, system_link={enabled}, '
+                                      f'server={endpoint}, player={player}', log, log[-6000:])
                     self.assertIsNone(process.poll(), 'Game exited during ISO startup')
                 finally:
                     if process.poll() is None:

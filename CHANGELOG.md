@@ -2,6 +2,10 @@
 
 ## Unreleased - community Windows integration
 
+- Direct EXE launches now load saved network and controller-icon settings.
+  Explicit command-line choices retain precedence. Log the effective network
+  configuration at startup and cover enabled/disabled overrides in ISO boot tests.
+
 - Explain local-network setup directly in the launcher. Show this PC's server
   address, provide a copy button and start the bundled relay with one click.
   Include this in the official community release after multiplayer testing;

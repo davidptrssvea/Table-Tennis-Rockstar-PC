@@ -65,6 +65,19 @@ The preview server was stopped afterward. ZIP SHA-256 remained
 ddcb0b07432b93ab13c1354cf23795667e8fa9a24b1d12c18c85dd91cd621f56.
 Official release publication remains pending multiplayer validation as requested.
 
+Saved-network follow-up: the user's game log reported networking disabled even
+though settings.ini contained system_link=true. The direct EXE path previously
+loaded ISO/pacing settings but omitted the saved networking fields. It now reads
+system_link, online_server, player_name (mapped to user_name), room_code and
+button_prompts, without overriding command-line settings. Effective network
+configuration is logged at startup; room codes are not written to that log.
+
+The isolated ISO boot regression now checks saved networking enabled, an explicit
+false override of saved true, and an explicit true override of saved false,
+including server/name precedence. All three boot cases passed; the base tests
+also passed. The stock-SDK application source compiled successfully. The local
+community test EXE was updated; the private ZIP and root installed game were not.
+
 ## v1.0.2 graphical installer
 
 The public `Install-Table-Tennis.exe` is compiled from `project/installer/Installer.cs`

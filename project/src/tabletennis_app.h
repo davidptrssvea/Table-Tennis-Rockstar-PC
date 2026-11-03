@@ -9,6 +9,7 @@
 #include "pc_features.h"
 #include "achievement_ui.h"
 #include "button_prompts.h"
+#include "system_link.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
 #ifndef WIN32_LEAN_AND_MEAN
@@ -202,6 +203,21 @@ class TabletennisApp : public rex::ReXApp {
         } else if (line.rfind("allow_tearing=", 0) == 0 &&
                    rex::cvar::GetFlagSource("allow_tearing") < rex::cvar::Source::kCommandLine) {
           REXCVAR_SET(allow_tearing, line.compare(14, 4, "true") == 0);
+        } else {
+          const auto separator = line.find('=');
+          if (separator == std::string::npos) continue;
+          const auto key = line.substr(0, separator);
+          auto value = line.substr(separator + 1);
+          while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) value.pop_back();
+          std::string flag;
+          if (key == "button_prompts") flag = key;
+#if defined(TT_COMMUNITY_NETWORK)
+          else if (key == "system_link" && (value == "true" || value == "false")) flag = key;
+          else if (key == "online_server" || key == "room_code") flag = key;
+          else if (key == "player_name") flag = "user_name";
+#endif
+          if (!flag.empty() && rex::cvar::GetFlagSource(flag) < rex::cvar::Source::kCommandLine)
+            rex::cvar::SetFlagByName(flag, value);
         }
       }
     }
@@ -382,6 +398,11 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
+#if defined(TT_COMMUNITY_NETWORK)
+    REXLOG_INFO("Tabletennis: Network setup: enabled={}, system_link={}, server={}, player={}",
+                tabletennis::lan::Enabled(), rex::cvar::GetFlagByName("system_link"),
+                rex::cvar::GetFlagByName("online_server"), rex::cvar::GetFlagByName("user_name"));
+#endif
     tabletennis::pc::SetAchievementsToggle([this] {
       app_context().CallInUIThreadDeferred([this] {
         if(!window()) return;
