@@ -2,6 +2,10 @@
 
 ## Unreleased - community Windows integration
 
+- Fix the local test build's CREATE MATCH crash: regeneration had used an older
+  overrides file and omitted 22 network callbacks. Verify all required override
+  registrations before native patching so stale generated code fails the build.
+
 - Direct EXE launches now load saved network and controller-icon settings.
   Explicit command-line choices retain precedence. Log the effective network
   configuration at startup and cover enabled/disabled overrides in ISO boot tests.

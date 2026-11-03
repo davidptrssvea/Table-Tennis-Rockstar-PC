@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'project/tools'))
 from disc_image import DiscImage, MAGIC, extract
-from patch_native import apply_edits
+from patch_native import apply_edits, verify_function_table
 from patch_menu import patch
 from package_source import audit, verify_zip
 import setup_build
@@ -89,6 +89,13 @@ class LocalBuildTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             patch(path)
         self.assertEqual(path.read_bytes(), b'unsupported input')
+
+    def test_missing_network_callback_registration_rejected(self):
+        table = '{ 0x822F9900, sub_822F9900 },\n'
+        with self.assertRaisesRegex(ValueError, '0x822F99C0'):
+            verify_function_table(table, {0x822F9900, 0x822F99C0})
+        verify_function_table(table + '{ 0x822F99C0, sub_822F99C0 },\n',
+                              {0x822F9900, 0x822F99C0})
 
     def test_public_allowlist_excludes_all_local_game_output(self):
         names = audit()

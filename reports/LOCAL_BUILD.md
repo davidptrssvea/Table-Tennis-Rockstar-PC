@@ -78,6 +78,28 @@ including server/name precedence. All three boot cases passed; the base tests
 also passed. The stock-SDK application source compiled successfully. The local
 community test EXE was updated; the private ZIP and root installed game were not.
 
+CREATE MATCH crash follow-up: the real two-PC test connected Pappa and Sebbe, but
+the host aborted at unregistered guest address 0x822F99C0 immediately after
+XGISessionCreate/XNetQosListen. The cached validation project's overrides.toml had
+not been synchronized before a forced regeneration; all 22 added network thunks
+were omitted from that local EXE. The public source overrides already had them.
+
+Synchronized the full reviewed source set, regenerated and rebuilt. patch_native
+now verifies every required override's function-table registration before making
+any edits. It rejects the old generated table and reports all 22 missing entries;
+the corrected table passes all 57 required registrations. A regression covers the
+exact missing callback. All 17 automated tests pass with runtime/native/transport
+checks enabled. An isolated UI replay selected ONLINE > PLAYER MATCH > CREATE
+MATCH, confirmed the settings and reached GAME LOBBY / Waiting for Player. The
+log confirms session creation succeeded and no unregistered-function failure.
+
+The test replay uses a private virtual-pad build only. The distributed local EXE
+is the separately captured pure production-input build (no controller-file hook),
+SHA-256 8d3b2603bd4910a2b8e068e33b99329afb811a81cb1ba0cb9374adffc7be1f97.
+Updated scratch/community-feature-test/dist/tabletennis.exe only. The existing
+private ZIP remains unchanged and requires this replacement EXE on both PCs.
+The user's running relay was left running; only the isolated test relay stopped.
+
 ## v1.0.2 graphical installer
 
 The public `Install-Table-Tennis.exe` is compiled from `project/installer/Installer.cs`

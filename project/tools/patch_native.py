@@ -15,6 +15,17 @@ def digest(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def verify_function_table(text, required):
+    registered = {(int(address, 16), name) for address, name in
+                  re.findall(r'\{\s*0x([0-9A-Fa-f]+)\s*,\s*(\w+)\s*\}', text)}
+    missing = sorted(address for address in required
+                     if (address, f'sub_{address:08X}') not in registered)
+    if missing:
+        addresses = ', '.join(f'0x{address:08X}' for address in missing)
+        raise ValueError('Missing registered override functions: ' + addresses +
+                         '. Regenerate with current overrides.toml and --ignore-stamp.')
+
+
 def apply_edits(text, rule):
     current = digest(text)
     if current == rule['output_sha256']:
@@ -31,6 +42,13 @@ def apply_edits(text, rule):
 
 def patch(folder):
     folder = Path(folder)
+    overrides = Path(__file__).resolve().parents[1] / 'overrides.toml'
+    required = {int(address, 16) for address in
+                re.findall(r'^0x([0-9A-Fa-f]+)\s*=\s*\{', overrides.read_text(), re.M)}
+    if not required:
+        raise ValueError('No expected override functions found')
+    verify_function_table((folder / 'tabletennis_init.cpp').read_text(encoding='utf-8'), required)
+    print(f'Verified {len(required)} required override registrations.', flush=True)
     rules = {r['name']: r for r in json.loads(Path(__file__).with_name('native_edits.json').read_text())}
     pending, seen = {}, set()
     for path in folder.glob('*.cpp'):
