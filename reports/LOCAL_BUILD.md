@@ -57,6 +57,14 @@ row and closed the process through the normal window-close path. Firewall
 permission was handled manually by the user; the agent did not alter security
 settings. No new release was published.
 
+Launcher follow-up: compiled and visually checked the inline local-network guide,
+server-start button, detected address and copy button. Clicking server start in
+an isolated preview launched the bundled Python relay, enabled networking and
+filled 192.168.50.245:27360. Its loopback HTTP status endpoint answered correctly.
+The preview server was stopped afterward. ZIP SHA-256 remained
+ddcb0b07432b93ab13c1354cf23795667e8fa9a24b1d12c18c85dd91cd621f56.
+Official release publication remains pending multiplayer validation as requested.
+
 ## v1.0.2 graphical installer
 
 The public `Install-Table-Tennis.exe` is compiled from `project/installer/Installer.cs`

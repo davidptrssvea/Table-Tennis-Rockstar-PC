@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -276,6 +279,8 @@ namespace TableTennisLauncher
             txtPlayer = NetworkField(contentPanel, "Player name", 15);
             txtRoom = NetworkField(contentPanel, "Private room code (6 characters; empty = public)", 6);
 
+            if (HasCommunityEngine) AddOnlineHelp(contentPanel);
+
             // Section: Shortcuts Callout Card
             var callout = new Border
             {
@@ -429,6 +434,86 @@ namespace TableTennisLauncher
                 txtIsoStatus.Text = "✖ Specified ISO image not found on this computer.";
                 txtIsoStatus.Foreground = new SolidColorBrush(Color.FromRgb(255, 90, 90));
             }
+        }
+
+        private static string LocalServerAddress() {
+            try {
+                foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()) {
+                    if (adapter.OperationalStatus != OperationalStatus.Up ||
+                        adapter.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                        adapter.NetworkInterfaceType == NetworkInterfaceType.Tunnel) continue;
+                    var properties = adapter.GetIPProperties();
+                    bool gateway = false;
+                    foreach (var route in properties.GatewayAddresses)
+                        if (route.Address.AddressFamily == AddressFamily.InterNetwork &&
+                            !route.Address.Equals(IPAddress.Any)) gateway = true;
+                    if (!gateway) continue;
+                    foreach (var address in properties.UnicastAddresses)
+                        if (address.Address.AddressFamily == AddressFamily.InterNetwork &&
+                            !IPAddress.IsLoopback(address.Address) &&
+                            !address.Address.ToString().StartsWith("169.254."))
+                            return address.Address + ":27360";
+                }
+            } catch { }
+            return "";
+        }
+
+        private void AddOnlineHelp(StackPanel parent) {
+            var box = new StackPanel { Margin = new Thickness(0,6,0,12) };
+            box.Children.Add(new TextBlock {
+                Text = "PLAY WITH A FRIEND ON YOUR LOCAL NETWORK",
+                Foreground = new SolidColorBrush(Color.FromRgb(0,210,255)),
+                FontWeight = FontWeights.Bold, FontSize = 11 });
+            box.Children.Add(new TextBlock {
+                Text = "1. ONE player starts the server below and leaves its window open.\n" +
+                    "2. BOTH players enable online play and enter the SAME server address.\n" +
+                    "3. Choose different player names and the SAME private room code (e.g. ABC234).\n" +
+                    "4. In the game: ONLINE > PLAYER MATCH. One creates a match; the other uses QUICK MATCH.",
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray,
+                FontSize = 11, Margin = new Thickness(0,6,0,8) });
+            var root = Path.GetDirectoryName(distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            string python = Path.Combine(root, "tools", "python", "python.exe");
+            string server = Path.Combine(root, "server", "ttlink_server.py");
+            bool bundled = File.Exists(python) && File.Exists(server);
+            string address = LocalServerAddress();
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            var start = new Button { Content = "Start server on this PC", Padding = new Thickness(10,5,10,5),
+                IsEnabled = bundled, Margin = new Thickness(0,0,8,0) };
+            var copy = new Button { Content = "Copy this PC's server address", Padding = new Thickness(10,5,10,5),
+                IsEnabled = address.Length != 0 };
+            var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray,
+                FontSize = 11, Margin = new Thickness(0,6,0,0) };
+            copy.Click += (sender, args) => {
+                try { Clipboard.SetText(address); status.Text = "Copied " + address + ". Use it on BOTH PCs if this PC hosts the server."; }
+                catch (Exception ex) { status.Text = "Could not copy: " + ex.Message; }
+            };
+            start.Click += (sender, args) => {
+                try {
+                    Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port 27360") {
+                        WorkingDirectory = root, UseShellExecute = true });
+                    chkNetwork.IsChecked = true;
+                    if (address.Length != 0) txtServer.Text = address;
+                    status.Text = "Server start requested. Keep its window open; it should say 'listening'. " +
+                        "Enter " + (address.Length == 0 ? "this PC's IPv4 address followed by :27360" : address) + " on BOTH PCs. " +
+                        "Handle any Windows network permission prompt yourself.";
+                } catch (Exception ex) { status.Text = "Could not start server: " + ex.Message; }
+            };
+            actions.Children.Add(start); actions.Children.Add(copy); box.Children.Add(actions);
+            box.Children.Add(new TextBlock {
+                Text = address.Length == 0 ? "This PC's address could not be detected. Use the server PC's local IPv4 address followed by :27360." :
+                    "If THIS PC hosts the server, enter on BOTH PCs: " + address,
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, FontSize = 11,
+                Margin = new Thickness(0,7,0,0) });
+            if (!bundled) box.Children.Add(new TextBlock {
+                Text = "Server tools are not included in this installation. Ask the host for their running server's address.",
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray, FontSize = 11,
+                Margin = new Thickness(0,6,0,0) });
+            box.Children.Add(new TextBlock {
+                Text = "A local address only works on your own network. Internet play needs a reachable server; no public server is provided.",
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray, FontSize = 11,
+                Margin = new Thickness(0,6,0,0) });
+            box.Children.Add(status);
+            parent.Children.Add(box);
         }
 
         private TextBox NetworkField(StackPanel parent, string label, int length) {

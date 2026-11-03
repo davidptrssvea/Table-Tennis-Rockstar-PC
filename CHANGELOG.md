@@ -2,6 +2,11 @@
 
 ## Unreleased - community Windows integration
 
+- Explain local-network setup directly in the launcher. Show this PC's server
+  address, provide a copy button and start the bundled relay with one click.
+  Include this in the official community release after multiplayer testing;
+  the existing private test ZIP is unchanged.
+
 - Adapt ThisIsAkill's achievement popup/list and EXTRAS > ACHIEVEMENTS entry;
   retain on-demand overlays and the Windows 60 FPS frame scheduler.
 - Add Auto/Xbox/PlayStation prompts. Full game texture replacement needs the

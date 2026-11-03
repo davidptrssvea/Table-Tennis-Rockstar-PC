@@ -47,6 +47,14 @@ retain ReXGlue's BSD license. These features are not in the v1.1.2 download abov
   room code. Networking is disabled by default; no public server is supplied or
   automatically contacted. **QUIT TO DESKTOP** remains the final menu item.
 
+The launcher explains which player hosts the server and what both players enter.
+It displays this PC's local server address and provides a copy button. Where the
+portable server/Python tools are installed, **Start server on this PC** opens the
+server console and fills the local server address automatically. Keep that console
+open while playing. The next official community release must include these tools;
+that release remains pending multiplayer testing. The existing private test ZIP
+has not been rebuilt with this launcher change.
+
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room
 isolation and rejoining after a server restart. Internet/NAT combinations,
