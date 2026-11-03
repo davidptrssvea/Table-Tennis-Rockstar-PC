@@ -1,7 +1,11 @@
 #pragma once
+#include <functional>
 #include <cstdint>
 struct PPCContext;
 namespace tabletennis::pc {
+double OverlayAspect();
+void ToggleAchievements();
+void SetAchievementsToggle(std::function<void()> callback);
 void SetWindow(void* window);
 void SetSurfaceSize(uint32_t width, uint32_t height);
 double CameraAspect(double original);

@@ -1,0 +1,3053 @@
+diff --git a/cmake/rexglue_install.cmake b/cmake/rexglue_install.cmake
+index d9a64eb..2127ef5 100644
+--- a/cmake/rexglue_install.cmake
++++ b/cmake/rexglue_install.cmake
+@@ -191,6 +191,7 @@ install(EXPORT rexglueTargets
+ #
+ # Windows: HKCU\Software\Kitware\CMake\Packages\rexglue  (REG_SZ, value name = MD5 hash)
+ # Unix:    ~/.cmake/packages/rexglue/<hash>               (file containing prefix path)
++if(NOT CMAKE_EXPORT_NO_PACKAGE_REGISTRY)
+ install(CODE [[
+     # Normalize path casing on Windows before hashing to avoid duplicate entries
+     if(CMAKE_HOST_WIN32)
+@@ -215,3 +216,4 @@ install(CODE [[
+     message(STATUS "Registered rexglue in CMake user package registry")
+     message(STATUS "  -> ${CMAKE_INSTALL_PREFIX}")
+ ]])
++endif()
+diff --git a/include/rex/graphics/graphics_system.h b/include/rex/graphics/graphics_system.h
+index ac6b056..d822083 100644
+--- a/include/rex/graphics/graphics_system.h
++++ b/include/rex/graphics/graphics_system.h
+@@ -63,6 +63,7 @@ class GraphicsSystem : public system::IGraphicsSystem {
+                          system::KernelState* kernel_state) override;
+   bool has_presentation() const override { return presenter_ != nullptr; }
+   void Shutdown() override;
++  void SetTextureLoadHook(system::TextureLoadHook hook) override;
+ 
+   // May be called from any thread any number of times, even during recovery
+   // from a device loss.
+diff --git a/include/rex/graphics/pipeline/texture/cache.h b/include/rex/graphics/pipeline/texture/cache.h
+index d26cd4f..6a2f595 100644
+--- a/include/rex/graphics/pipeline/texture/cache.h
++++ b/include/rex/graphics/pipeline/texture/cache.h
+@@ -21,6 +21,7 @@
+ #include <rex/assert.h>
+ #include <rex/graphics/pipeline/texture/util.h>
+ #include <rex/graphics/register_file.h>
++#include <rex/system/interfaces/graphics.h>
+ #include <rex/graphics/shared_memory.h>
+ #include <rex/graphics/xenos.h>
+ #include <rex/hash.h>
+@@ -53,6 +54,11 @@ namespace rex::graphics {
+ // TODO(Triang3l): Attach the largest LOD to existing textures with a valid
+ // mip_address but no base ever used yet (no base_address) to save memory
+ // because textures are streamed this way anyway.
++// Installed through IGraphicsSystem::SetTextureLoadHook (rex/system/interfaces/graphics.h).
++using system::TextureLoadHook;
++using system::TextureLoadHookInfo;
++void SetTextureLoadHook(TextureLoadHook hook);
++
+ class TextureCache {
+  public:
+   // Hard limit, originating from the half-pixel offset filling hack in the
+diff --git a/include/rex/system/interfaces/graphics.h b/include/rex/system/interfaces/graphics.h
+index d54df86..6fab7eb 100644
+--- a/include/rex/system/interfaces/graphics.h
++++ b/include/rex/system/interfaces/graphics.h
+@@ -31,6 +31,12 @@ class KernelState;
+ 
+ namespace rex::system {
+ 
++struct TextureLoadHookInfo {
++  uint32_t guest_address,size,width,height,pitch_texels,format;
++  bool tiled;
++};
++using TextureLoadHook = void (*)(const TextureLoadHookInfo&);
++
+ class IGraphicsSystem {
+  public:
+   virtual ~IGraphicsSystem() = default;
+@@ -79,6 +85,8 @@ class IGraphicsSystem {
+     (void)blocking;
+   }
+ 
++  virtual void SetTextureLoadHook(TextureLoadHook hook) { (void)hook; }
++
+   // One-shot convenience for callers that don't care about the split.
+   X_STATUS Setup(runtime::FunctionDispatcher* function_dispatcher, KernelState* kernel_state,
+                  ui::WindowedAppContext* app_context, bool with_presentation) {
+diff --git a/include/rex/system/xsocket.h b/include/rex/system/xsocket.h
+index a1b4443..f998f1d 100644
+--- a/include/rex/system/xsocket.h
++++ b/include/rex/system/xsocket.h
+@@ -10,8 +10,11 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <cstdint>
+ #include <cstring>
+ #include <queue>
++#include <string>
++#include <vector>
+ 
+ #include <rex/math.h>
+ #include <rex/system/xobject.h>
+@@ -19,6 +22,103 @@
+ 
+ namespace rex::system {
+ 
++// Host side of the title's network: how guest addresses and ports map to this machine's
++// sockets. Addresses are IPv4 in host byte order.
++//
++// The title talks to its peers with the plain IPv4 addresses it receives from XNet
++// (XNetXnAddrToInAddr returns the peer's real address), so two hosts reach each other directly.
++// Ports below 1024 need root on Linux and macOS, so every guest port P is used as
++// P + net_port_offset on the host, on both ends.
++//
++// Test setups: with net_address set to a loopback address (127.x.y.z) sockets bind to it
++// instead of INADDR_ANY, and broadcasts go to the net_peers addresses instead, so several
++// instances on one machine see each other as separate hosts.
++class XSocket;
++
++namespace net {
++uint32_t LocalAddress();
++bool BindLocalAddress();
++const std::vector<uint32_t>& BroadcastPeers();
++uint16_t HostPort(uint16_t guest_port);
++uint16_t GuestPort(uint16_t host_port);
++// A stable Ethernet address for an IPv4 address (locally administered).
++void EthernetAddress(uint32_t address, uint8_t out[6]);
++// The last socket error as a Winsock error code (WSAEWOULDBLOCK, ...).
++uint32_t LastError();
++// XNKIDs of the sessions this title hosts or joined (XSessionCreate / XSessionDelete). On the
++// console the key exchange tells XNet which session a peer belongs to, and XNetInAddrToXnAddr
++// reports that XNKID; here every peer counts as a member of the latest session.
++void RegisterSessionKey(const uint8_t kid[8]);
++// Sessions this machine hosts (XSESSION_INFO: 60 bytes) and their XSESSION_CREATE_* flags, for
++// RewriteSessionAnnouncement. HostedSessionModified records a host's XSessionModify flags.
++void RegisterHostedSession(const uint8_t info[60], uint32_t flags);
++void HostedSessionModified(uint32_t flags);
++// Spectating over system link: on Xbox LIVE a spectator found the match session through
++// matchmaking (the match session is created with XSESSION_CREATE_USES_MATCHMAKING, the lobby is
++// not); over system link the title answers every search with its lobby, which has no room for a
++// spectator once the match runs. While the hosted lobby is closed to joins in progress and a
++// match session exists, a search answer naming the lobby names the match session instead.
++// Returns true and fills `out` when the datagram was changed.
++bool RewriteSessionAnnouncement(const uint8_t* data, size_t size, std::vector<uint8_t>& out);
++void UnregisterSessionKey(const uint8_t kid[8]);
++bool CurrentSessionKey(uint8_t kid[8]);
++// Security associations. On the console XNetXnAddrToInAddr hands out a different IN_ADDR for
++// every (peer, session XNKID) pair, and titles keep one connection per IN_ADDR (Table Tennis
++// talks to the same peer in its game session and in its spectator session at once). These
++// give such a pair a stable address in 198.18.0.0/15; packets to it go to the peer's real
++// address, tagged with the XNKID, and tagged packets from the peer come back from it.
++uint32_t SecureAddress(uint32_t real, const uint8_t kid[8]);
++bool ResolveSecureAddress(uint32_t address, uint32_t* real, uint8_t kid[8]);
++
++// Online play: a virtual LAN through a Table Tennis online server (server/ in the game's
++// repository). Players connected to the same room see each other as one network: System
++// Link broadcasts go through the server to the room, match traffic goes straight between the
++// players after UDP hole punching, or through the server when that fails. While online, every
++// datagram the title sends travels this way and the LAN is not used; the title's own address
++// (LocalAddress) is the room address the server assigned.
++//
++// Settings: online (off, public, room), room_code, online_server (host[:port]),
++// online_relay_only (never connect players directly; for tests and difficult networks),
++// online_redundancy (auto, on, off: send match datagrams twice while packets get lost).
++// Connection quality to one room member, from pings over the path the match uses.
++struct OnlinePeerQuality {
++  std::string name;
++  int rtt_ms = -1;     // smoothed round trip, -1 until measured
++  float loss = 0.0f;   // share of the last pings without an answer (0..1)
++  bool direct = false; // false: through the server
++  bool redundant = false;  // match datagrams are sent twice (online_redundancy)
++};
++
++struct OnlineStatus {
++  std::string mode;        // off, public, room
++  std::string room;        // room code, empty for the public room
++  std::string state;       // short text for the settings page
++  bool connected = false;  // in a room
++  int room_players = 0;    // including this player
++  int players_online = 0;  // on the whole server
++  int direct_peers = 0;    // room members reached directly
++  int relayed_peers = 0;   // room members reached through the server
++  int server_rtt_ms = -1;  // round trip to the server
++  int nearby_players = 0;  // public room players the server estimates within 150 ms
++  std::vector<OnlinePeerQuality> peers;
++  int opponent = -1;       // index in peers of the member the match traffic goes to, or -1
++};
++OnlineStatus GetOnlineStatus();
++// Changes the online setting at run time (the settings page); the connection follows.
++void SetOnline(const std::string& mode, const std::string& room_code);
++// True while online play is switched on, connected or not.
++bool OnlineEnabled();
++// Round trip in ms to the room member with this room address: measured, or estimated through
++// the server while not measured yet; -1 if no such member.
++int OnlinePeerRtt(uint32_t address);
++// The machine's own LAN address (net_address or the default route's), also while online.
++uint32_t BaseAddress();
++// Used by XSocket: send a title datagram online; register the socket bound to a guest port.
++void OnlineSend(uint32_t dest, uint16_t src_port, uint16_t dst_port, const uint8_t* data,
++                size_t len);
++void RegisterBoundSocket(uint16_t port, XSocket* socket);
++}  // namespace net
++
+ struct XSOCKADDR {
+   rex::be<uint16_t> address_family;
+   char sa_data[14];
+@@ -102,18 +202,22 @@ class XSocket : public XObject {
+   X_STATUS SetOption(uint32_t level, uint32_t optname, void* optval_ptr, uint32_t optlen);
+   X_STATUS IOControl(uint32_t cmd, uint8_t* arg_ptr);
+ 
+-  X_STATUS Connect(N_XSOCKADDR* name, int name_len);
+-  X_STATUS Bind(N_XSOCKADDR_IN* name, int name_len);
++  // Addresses are the guest's XSOCKADDR_IN (big-endian fields). Failures return -1 / an error
++  // status with the native error left for net::LastError().
++  X_STATUS Connect(const XSOCKADDR_IN* name);
++  X_STATUS Bind(const XSOCKADDR_IN* name);
+   X_STATUS Listen(int backlog);
+-  object_ref<XSocket> Accept(N_XSOCKADDR* name, int* name_len);
++  object_ref<XSocket> Accept(XSOCKADDR_IN* name, uint32_t* name_len);
+   int Shutdown(int how);
++  int GetSockName(XSOCKADDR_IN* name);
+ 
+   int Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags);
+   int Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags);
+ 
+-  int RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_IN* from,
+-               uint32_t* from_len);
+-  int SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_IN* to, uint32_t to_len);
++  int RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, XSOCKADDR_IN* from);
++  // A datagram that arrived through the online server or a directly connected player.
++  void DeliverOnline(uint32_t source, uint16_t source_port, const uint8_t* data, size_t len);
++  int SendTo(const uint8_t* buf, uint32_t buf_len, uint32_t flags, const XSOCKADDR_IN* to);
+ 
+   struct packet {
+     // These values are in network byte order.
+@@ -140,6 +244,15 @@ class XSocket : public XObject {
+   uint16_t bound_port_ = 0;
+ 
+   bool broadcast_socket_ = false;
++  bool nonblocking_ = false;
++
++  struct OnlinePacket {
++    uint32_t source;
++    uint16_t source_port;
++    std::vector<uint8_t> data;
++  };
++  std::mutex online_mutex_;
++  std::queue<OnlinePacket> online_packets_;
+ 
+   std::unique_ptr<rex::thread::Event> event_;
+   std::mutex incoming_packet_mutex_;
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index 8f2fcb0..cbcee6f 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include <rex/cvar.h>
+ #include <rex/graphics/command_processor.h>
++#include <rex/graphics/pipeline/texture/cache.h>
+ #include <rex/graphics/flags.h>
+ #include <rex/kernel/xboxkrnl/video.h>
+ #include <rex/logging.h>
+@@ -178,6 +179,8 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+   return X_STATUS_SUCCESS;
+ }
+ 
++void GraphicsSystem::SetTextureLoadHook(system::TextureLoadHook hook) { graphics::SetTextureLoadHook(hook); }
++
+ void GraphicsSystem::Shutdown() {
+   if (command_processor_) {
+     command_processor_->Shutdown();
+diff --git a/src/graphics/pipeline/texture/cache.cpp b/src/graphics/pipeline/texture/cache.cpp
+index 76f5600..3c6cf63 100644
+--- a/src/graphics/pipeline/texture/cache.cpp
++++ b/src/graphics/pipeline/texture/cache.cpp
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cstdint>
+ #include <utility>
+ 
+@@ -127,6 +128,13 @@ REXCVAR_DEFINE_BOOL(pre_mask_resolve_l2_block, true, "GPU",
+ 
+ namespace rex::graphics {
+ 
++namespace {
++std::atomic<TextureLoadHook> texture_load_hook{nullptr};
++}  // namespace
++
++void SetTextureLoadHook(TextureLoadHook hook) { texture_load_hook.store(hook); }
++
++
+ const TextureCache::LoadShaderInfo TextureCache::load_shader_info_[kLoadShaderCount] = {
+     // k8bpb
+     {3, 4, 1, 4},
+@@ -396,6 +404,18 @@ bool TextureCache::PrepareTextureLoad(Texture& texture, PendingTextureLoad& pend
+ 
+   TextureKey texture_key = texture.key();
+   if (base_outdated) {
++    if (TextureLoadHook hook = texture_load_hook.load();
++        hook && texture_key.dimension == xenos::DataDimension::k2DOrStacked && !texture_key.scaled_resolve) {
++      TextureLoadHookInfo info;
++      info.guest_address = texture_key.base_page << 12;
++      info.size = texture.GetGuestBaseSize();
++      info.width = texture_key.width_minus_1 + 1;
++      info.height = texture_key.height_minus_1 + 1;
++      info.pitch_texels = texture_key.pitch << 5;
++      info.format = uint32_t(texture_key.format);
++      info.tiled = texture_key.tiled != 0;
++      hook(info);
++    }
+     PendingSharedMemoryRange pending_range;
+     pending_range.start = texture_key.base_page << 12;
+     pending_range.length =
+diff --git a/src/kernel/xam/apps/xgi_app.cpp b/src/kernel/xam/apps/xgi_app.cpp
+index 2b222da..c23f7d3 100644
+--- a/src/kernel/xam/apps/xgi_app.cpp
++++ b/src/kernel/xam/apps/xgi_app.cpp
+@@ -10,6 +10,9 @@
+  */
+ 
+ #include <rex/kernel/xam/apps/xgi_app.h>
++#include <rex/system/xsocket.h>
++
++#include <random>
+ #include <rex/logging.h>
+ #include <rex/thread.h>
+ 
+@@ -113,6 +116,38 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
+           "{:08X})",
+           session_ptr, flags, num_slots_public, num_slots_private, user_xuid, session_info_ptr,
+           nonce_ptr);
++      // A host creates the session's identity: XSESSION_INFO { XNKID sessionID; XNADDR
++      // hostAddress; XNKEY keyExchangeKey; }. A system link XNKID has 0 in the top four bits
++      // of its first byte. Joining titles pass in the host's XSESSION_INFO, left untouched.
++      constexpr uint32_t kCreateHost = 0x00000001;
++      static std::mt19937_64 random{std::random_device{}()};
++      if ((flags & kCreateHost) && session_info_ptr && memory_->LookupHeap(session_info_ptr)) {
++        uint8_t* info = memory_->TranslateVirtual<uint8_t*>(session_info_ptr);
++        uint64_t id = random();
++        uint8_t* kid = info;
++        uint32_t address = rex::system::net::LocalAddress();
++        // Random first four bytes, then the host's address: the title's match list keeps the
++        // XNKID but not always the host's XNADDR, and XNetQosLookup finds the host from it.
++        for (int i = 0; i < 4; ++i) kid[i] = uint8_t(id >> (i * 8));
++        memory::store_and_swap<uint32_t>(kid + 4, address);
++        kid[0] &= 0x0F;
++        uint8_t* host = info + 8;  // XNADDR, 36 bytes
++        std::memset(host, 0, 36);
++        memory::store_and_swap<uint32_t>(host + 0, address);
++        rex::system::net::EthernetAddress(address, host + 10);
++        uint8_t* key = info + 44;
++        for (int i = 0; i < 16; ++i) key[i] = uint8_t(random());
++        rex::system::net::RegisterHostedSession(info, flags);
++        REXKRNL_INFO("XGISessionCreate: system link session {:016X} hosted at {}.{}.{}.{}",
++                     memory::load_and_swap<uint64_t>(kid), address >> 24, (address >> 16) & 0xFF,
++                     (address >> 8) & 0xFF, address & 0xFF);
++      }
++      if (session_info_ptr && memory_->LookupHeap(session_info_ptr)) {
++        rex::system::net::RegisterSessionKey(memory_->TranslateVirtual<uint8_t*>(session_info_ptr));
++      }
++      if (nonce_ptr && memory_->LookupHeap(nonce_ptr)) {
++        memory::store_and_swap<uint64_t>(memory_->TranslateVirtual(nonce_ptr), random() | 1);
++      }
+       return X_E_SUCCESS;
+     }
+     case 0x000B0011: {
+@@ -191,6 +226,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
+ 
+       REXKRNL_DEBUG("XSessionModify({:08X}, {:08X}, {:08X}, {:08X})", obj_ptr, flags,
+                     maxPublicSlots, maxPrivateSlots);
++      rex::system::net::HostedSessionModified(flags);
+ 
+       return X_E_SUCCESS;
+     }
+diff --git a/src/kernel/xam/xam_net.cpp b/src/kernel/xam/xam_net.cpp
+index 58e36a4..3f7b929 100644
+--- a/src/kernel/xam/xam_net.cpp
++++ b/src/kernel/xam/xam_net.cpp
+@@ -12,13 +12,23 @@
+ // Disable warnings about unused parameters for kernel functions
+ #pragma GCC diagnostic ignored "-Wunused-parameter"
+ 
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <chrono>
+ #include <cstring>
++#include <map>
++#include <mutex>
++#include <random>
++#include <thread>
++#include <vector>
+ 
+ #if REX_PLATFORM_MAC
+ #include <sys/select.h>
+ #endif
+ 
+ #include <rex/chrono/clock.h>
++#include <rex/net/socket.h>
+ #include <rex/kernel/xam/module.h>
+ #include <rex/kernel/xam/private.h>
+ #include <rex/kernel/xboxkrnl/error.h>
+@@ -42,6 +52,7 @@
+ #include <netinet/in.h>
+ #include <netinet/ip.h>
+ #include <sys/socket.h>
++#include <unistd.h>
+ #endif
+ 
+ namespace rex {
+@@ -238,6 +249,21 @@ u32 NetDll_XNetRandom_entry(u32 caller, mapped_void buffer_ptr, u32 length) {
+   return 0;
+ }
+ 
++// Socket handles as the title sees them. Titles treat a negative SOCKET as invalid (Rockstar's
++// network layer checks "socket >= 0"), but kernel object handles start at 0xF8000000, so sockets
++// are handed out as small positive numbers.
++constexpr uint32_t kGuestSocketBase = 0x1000;
++
++uint32_t ToGuestSocket(uint32_t handle) {
++  return handle - XObject::kHandleBase + kGuestSocketBase;
++}
++
++object_ref<XSocket> LookupSocket(uint32_t guest_socket) {
++  if (guest_socket < kGuestSocketBase || guest_socket == 0xFFFFFFFF) return nullptr;
++  return REX_KERNEL_OBJECTS()->LookupObject<XSocket>(guest_socket - kGuestSocketBase +
++                                                    XObject::kHandleBase);
++}
++
+ u32 NetDll_WSAStartup_entry(u32 caller, u16 version, ppc_ptr_t<X_WSADATA> data_ptr) {
+ // TODO(benvanik): abstraction layer needed.
+ #if REX_PLATFORM_WIN32
+@@ -323,7 +349,7 @@ u32 NetDll_WSASendTo_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XWSABUF> buf
+   assert(!overlapped);
+   assert(!completion_routine);
+ 
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -345,8 +371,13 @@ u32 NetDll_WSASendTo_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XWSABUF> buf
+     combined_buffer_offset += buffers[i].len;
+   }
+ 
+-  N_XSOCKADDR_IN native_to(to_ptr);
+-  socket->SendTo(combined_buffer_mem.data(), combined_buffer_size, flags, &native_to, to_len);
++  int sent = socket->SendTo(combined_buffer_mem.data(), combined_buffer_size, flags,
++                            to_ptr ? to_ptr.host_address() : nullptr);
++  if (sent < 0) {
++    XThread::SetLastError(rex::system::net::LastError());
++    return -1;
++  }
++  if (num_bytes_sent) *num_bytes_sent = sent;
+ 
+   // TODO: Instantly complete overlapped
+ 
+@@ -435,28 +466,17 @@ struct XnAddrStatus {
+   static const uint32_t XNET_GET_XNADDR_TROUBLESHOOT = 0x00008000;
+ };
+ 
++// The title's own address. ina is this machine's LAN address (or net_address); the Ethernet
++// address is derived from it, so every host can rebuild a peer's XNADDR from its IP alone.
++void FillXnAddr(uint32_t address, XNADDR* addr) {
++  std::memset(addr, 0, sizeof(XNADDR));
++  addr->ina.s_addr = htonl(address);
++  rex::system::net::EthernetAddress(address, addr->abEnet);
++}
++
+ u32 NetDll_XNetGetTitleXnAddr_entry(u32 caller, ppc_ptr_t<XNADDR> addr_ptr) {
+-  // Just return a loopback address atm.
+-  addr_ptr->ina.s_addr = htonl(INADDR_LOOPBACK);
+-  addr_ptr->inaOnline.s_addr = 0;
+-  addr_ptr->wPortOnline = 0;
+-
+-  // TODO(gibbed): A proper mac address.
+-  // RakNet's 360 version appears to depend on abEnet to create "random" 64-bit
+-  // numbers. A zero value will cause RakPeer::Startup to fail. This causes
+-  // 58411436 to crash on startup.
+-  // The 360-specific code is scrubbed from the RakNet repo, but there's still
+-  // traces of what it's doing which match the game code.
+-  // https://github.com/facebookarchive/RakNet/blob/master/Source/RakPeer.cpp#L382
+-  // https://github.com/facebookarchive/RakNet/blob/master/Source/RakPeer.cpp#L4527
+-  // https://github.com/facebookarchive/RakNet/blob/master/Source/RakPeer.cpp#L4467
+-  // "Mac address is a poor solution because you can't have multiple connections
+-  // from the same system"
+-  std::memset(addr_ptr->abEnet, 0xCC, 6);
+-
+-  std::memset(addr_ptr->abOnline, 0, 20);
+-
+-  return XnAddrStatus::XNET_GET_XNADDR_STATIC;
++  FillXnAddr(rex::system::net::LocalAddress(), addr_ptr);
++  return XnAddrStatus::XNET_GET_XNADDR_STATIC | XnAddrStatus::XNET_GET_XNADDR_ETHERNET;
+ }
+ 
+ u32 NetDll_XNetGetDebugXnAddr_entry(u32 caller, ppc_ptr_t<XNADDR> addr_ptr) {
+@@ -473,21 +493,50 @@ u32 NetDll_XNetXnAddrToMachineId_entry(u32 caller, ppc_ptr_t<XNADDR> addr_ptr, m
+ 
+ void NetDll_XNetInAddrToString_entry(u32 caller, u32 in_addr, mapped_string string_out,
+                                      u32 string_size) {
+-  rex::string::copy_truncating(string_out, "666.666.666.666", string_size);
++  auto text = fmt::format("{}.{}.{}.{}", (in_addr >> 24) & 0xFF, (in_addr >> 16) & 0xFF,
++                          (in_addr >> 8) & 0xFF, in_addr & 0xFF);
++  rex::string::copy_truncating(string_out, text.c_str(), string_size);
+ }
+ 
+-// This converts a XNet address to an IN_ADDR. The IN_ADDR is used for
+-// subsequent socket calls (like a handle to a XNet address)
++// This converts a XNet address to an IN_ADDR. The IN_ADDR is used for subsequent socket calls
++// (like a handle to a XNet address). The console hands out a private address per security
++// association and tunnels the traffic through its secure layer. Here a peer within a session
++// (non-zero XNKID) gets an association address (rex::system::net::SecureAddress), anything else its real
++// IPv4 address; either way the packets go straight to the peer.
+ u32 NetDll_XNetXnAddrToInAddr_entry(u32 caller, ppc_ptr_t<XNADDR> xn_addr, mapped_void xid,
+-                                    mapped_void in_addr) {
+-  return 1;
++                                    mapped_u32 in_addr) {
++  if (!xn_addr || !in_addr) {
++    return X_ERROR_INVALID_PARAMETER;
++  }
++  uint32_t address = ntohl(xn_addr->ina.s_addr);
++  if (!address) {
++    return X_ERROR_FUNCTION_FAILED;
++  }
++  static const uint8_t kZero[8] = {};
++  if (xid && std::memcmp(xid.host_address(), kZero, 8) != 0) {
++    address = rex::system::net::SecureAddress(address, static_cast<const uint8_t*>(xid.host_address()));
++  }
++  *in_addr = address;  // stored big-endian: network order, like the guest's IN_ADDR
++  return 0;
+ }
+ 
+-// Does the reverse of the above.
+-// FIXME: Arguments may not be correct.
+-u32 NetDll_XNetInAddrToXnAddr_entry(u32 caller, mapped_void in_addr, ppc_ptr_t<XNADDR> xn_addr,
++// Does the reverse of the above: the peer's XNADDR (rebuilt from its real address) and the
++// session its association belongs to.
++u32 NetDll_XNetInAddrToXnAddr_entry(u32 caller, u32 in_addr, ppc_ptr_t<XNADDR> xn_addr,
+                                     mapped_void xid) {
+-  return 1;
++  if (!xn_addr || !in_addr) {
++    return X_ERROR_INVALID_PARAMETER;
++  }
++  uint32_t real = in_addr;
++  uint8_t kid[8] = {};
++  if (!rex::system::net::ResolveSecureAddress(in_addr, &real, kid)) {
++    rex::system::net::CurrentSessionKey(kid);
++  }
++  FillXnAddr(real, xn_addr);
++  if (xid) {
++    std::memcpy(xid.host_address(), kid, 8);
++  }
++  return 0;
+ }
+ 
+ // https://www.google.com/patents/WO2008112448A1?cl=en
+@@ -506,7 +555,8 @@ struct XEthernetStatus {
+ };
+ 
+ u32 NetDll_XNetGetEthernetLinkStatus_entry(u32 caller) {
+-  return 0;
++  return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE | XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
++         XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
+ }
+ 
+ u32 NetDll_XNetDnsLookup_entry(u32 caller, mapped_string host, u32 event_handle, mapped_u32 pdns) {
+@@ -549,17 +599,252 @@ u32 NetDll_XNetQosServiceLookup_entry(u32 caller, u32 flags, u32 event_handle, m
+   return 0;
+ }
+ 
++// QoS: the title measures the latency to a session it found (XNetQosLookup) and reads the data
++// the host published with XNetQosListen. Hosts answer probes on UDP port kQosPort (guest port;
++// the net_port_offset applies), using the same address rules as title sockets.
++namespace qos {
++constexpr uint16_t kQosPort = 3075;
++constexpr uint32_t kRequest = 0x54545131;   // "TTQ1"
++constexpr uint32_t kResponse = 0x54545231;  // "TTR1"
++constexpr size_t kMaxData = 1024;
++
++// XNQOSINFO flags
++constexpr uint8_t kComplete = 0x01;
++constexpr uint8_t kTargetContacted = 0x02;
++constexpr uint8_t kDataReceived = 0x08;
++
++std::mutex mutex;
++std::vector<uint8_t> listen_data;
++bool listening = false;
++std::atomic<bool> server_started{false};
++
++sockaddr_in QosAddress(uint32_t address) {
++  sockaddr_in addr{};
++  addr.sin_family = AF_INET;
++  addr.sin_port = htons(rex::system::net::HostPort(kQosPort));
++  addr.sin_addr.s_addr = htonl(address);
++  return addr;
++}
++
++void Serve() {
++  rex::net::SocketHandle fd = ::socket(AF_INET, SOCK_DGRAM, 0);
++  sockaddr_in local = QosAddress(rex::system::net::BindLocalAddress() ? rex::system::net::BaseAddress() : INADDR_ANY);
++  if (fd < 0 || ::bind(fd, reinterpret_cast<sockaddr*>(&local), sizeof(local)) < 0) {
++    REXKRNL_ERROR("XNetQos: cannot listen on UDP port {}: {}", ntohs(local.sin_port),
++                  std::strerror(errno));
++    if (fd >= 0) rex::net::socket_close(fd);
++    return;
++  }
++  REXKRNL_INFO("XNetQos: answering probes on UDP port {}", ntohs(local.sin_port));
++  uint8_t packet[16 + kMaxData];
++  while (true) {
++    sockaddr_in from{};
++    auto from_len = int(sizeof(from));
++    auto len = ::recvfrom(fd, reinterpret_cast<char*>(packet), sizeof(packet), 0, reinterpret_cast<sockaddr*>(&from),
++                             &from_len);
++    if (len < 16 || memory::load_and_swap<uint32_t>(packet) != kRequest) continue;
++    size_t reply_len = 16;
++    {
++      std::lock_guard<std::mutex> lock(mutex);
++      if (!listening) continue;
++      memory::store_and_swap<uint32_t>(packet, kResponse);
++      std::memcpy(packet + 16, listen_data.data(), listen_data.size());
++      reply_len += listen_data.size();
++    }
++    ::sendto(fd, reinterpret_cast<char*>(packet), int(reply_len), 0, reinterpret_cast<sockaddr*>(&from), from_len);
++  }
++}
++
++struct Lookup {
++  bool released = false;
++  bool done = false;
++  std::vector<uint32_t> allocations;  // guest blocks (XNQOS first)
++};
++std::map<uint32_t, Lookup> lookups;
++
++void Free(Lookup& lookup) {
++  for (uint32_t block : lookup.allocations) {
++    REX_KERNEL_MEMORY()->SystemHeapFree(block);
++  }
++}
++
++// Probes one target; returns the round trip in ms (or -1) and its QoS data.
++int Probe(uint32_t address, uint32_t probes, std::vector<uint8_t>* data, uint32_t* received) {
++  rex::net::SocketHandle fd = ::socket(AF_INET, SOCK_DGRAM, 0);
++  if (fd < 0) return -1;
++  if (rex::system::net::BindLocalAddress()) {
++    sockaddr_in local = QosAddress(rex::system::net::BaseAddress());
++    local.sin_port = 0;
++    ::bind(fd, reinterpret_cast<sockaddr*>(&local), sizeof(local));
++  }
++#if REX_PLATFORM_WIN32
++  DWORD timeout=100;
++#else
++  timeval timeout{0,100000};
++#endif
++  setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,reinterpret_cast<const char*>(&timeout),sizeof(timeout));
++  sockaddr_in to = QosAddress(address);
++  using clock = std::chrono::steady_clock;
++  std::vector<int> rtts;
++  for (uint32_t i = 0; i < std::max(probes, 2u); ++i) {
++    uint8_t request[16] = {};
++    memory::store_and_swap<uint32_t>(request, kRequest);
++    memory::store_and_swap<uint32_t>(request + 4, i);
++    auto sent_at = clock::now();
++    ::sendto(fd, reinterpret_cast<const char*>(request), sizeof(request), 0, reinterpret_cast<sockaddr*>(&to), sizeof(to));
++    uint8_t reply[16 + kMaxData];
++    auto len = ::recv(fd, reinterpret_cast<char*>(reply), sizeof(reply), 0);
++    if (len >= 16 && memory::load_and_swap<uint32_t>(reply) == kResponse) {
++      rtts.push_back(int(std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() -
++                                                                              sent_at)
++                             .count()));
++      data->assign(reply + 16, reply + len);
++    }
++  }
++  rex::net::socket_close(fd);
++  *received = uint32_t(rtts.size());
++  if (rtts.empty()) return -1;
++  std::sort(rtts.begin(), rtts.end());
++  return rtts[rtts.size() / 2];
++}
++}  // namespace qos
++
+ u32 NetDll_XNetQosRelease_entry(u32 caller, ppc_ptr_t<XNQOS> qos) {
+   if (!qos) {
+     return X_STATUS_INVALID_PARAMETER;
+   }
+-  REX_KERNEL_MEMORY()->SystemHeapFree(qos.guest_address());
++  std::lock_guard<std::mutex> lock(qos::mutex);
++  auto it = qos::lookups.find(qos.guest_address());
++  if (it == qos::lookups.end()) {
++    REX_KERNEL_MEMORY()->SystemHeapFree(qos.guest_address());
++  } else if (it->second.done) {
++    qos::Free(it->second);
++    qos::lookups.erase(it);
++  } else {
++    it->second.released = true;  // freed when the probes finish
++  }
+   return 0;
+ }
+ 
++// XNetQosListen(caller, pxnkid, pb, cb, dwBitsPerSec, dwFlags)
+ u32 NetDll_XNetQosListen_entry(u32 caller, mapped_void id, mapped_void data, u32 data_size, u32 r7,
+                                u32 flags) {
+-  return X_ERROR_FUNCTION_FAILED;
++  constexpr uint32_t kEnable = 0x01, kDisable = 0x02, kSetData = 0x04, kRelease = 0x10;
++  {
++    std::lock_guard<std::mutex> lock(qos::mutex);
++    if (flags & kSetData) {
++      const uint8_t* bytes = data ? static_cast<const uint8_t*>(data.host_address()) : nullptr;
++      size_t size = bytes ? std::min<size_t>(data_size, qos::kMaxData) : 0;
++      qos::listen_data.assign(bytes, bytes + size);
++    }
++    if (flags & kEnable) qos::listening = true;
++    if (flags & (kDisable | kRelease)) qos::listening = false;
++    if (flags & kRelease) qos::listen_data.clear();
++  }
++  REXKRNL_INFO("XNetQosListen(flags {:X}, {} bytes)", flags, data_size);
++  if ((flags & kEnable) && !qos::server_started.exchange(true)) {
++    std::thread(qos::Serve).detach();
++  }
++  return 0;
++}
++
++// XNetQosLookup(caller, cxna, apxna, apxnkid, apxnkey, cina, aina, adwServiceId, cProbes,
++//               dwBitsPerSec, dwFlags, hEvent, ppxnqos)
++u32 NetDll_XNetQosLookup_entry(u32 caller, u32 count, mapped_u32 xnaddrs, mapped_u32 xnkids,
++                               mapped_u32 xnkeys, u32 service_count, mapped_u32 service_addrs,
++                               mapped_u32 service_ids, u32 probes, u32 bits_per_sec, u32 flags,
++                               u32 event_handle, mapped_u32 pqos) {
++  if (!pqos) {
++    return X_ERROR_INVALID_PARAMETER;
++  }
++  const uint32_t total = count + service_count;
++  const uint32_t size = sizeof(XNQOS) + sizeof(XNQOSINFO) * (total ? total - 1 : 0);
++  uint32_t qos_guest = REX_KERNEL_MEMORY()->SystemHeapAlloc(size);
++  auto* result = REX_KERNEL_MEMORY()->TranslateVirtual<XNQOS*>(qos_guest);
++  std::memset(result, 0, size);
++  result->count = total;
++  result->count_pending = total;
++  // Service (Xbox LIVE server) lookups complete at once without contact.
++  for (uint32_t i = count; i < total; ++i) {
++    result->info[i].flags = qos::kComplete;
++  }
++  result->count_pending = count;
++
++  std::vector<uint32_t> targets;
++  for (uint32_t i = 0; i < count; ++i) {
++    auto* xna = REX_KERNEL_MEMORY()->TranslateVirtual<XNADDR*>(xnaddrs[i]);
++    uint32_t address = ntohl(xna->ina.s_addr);
++    // The match list passes the session's XNKID with an empty XNADDR: the host's address is in
++    // the XNKID's last four bytes (XGISessionCreate).
++    if (!address && xnkids && xnkids[i]) {
++      const uint8_t* kid = REX_KERNEL_MEMORY()->TranslateVirtual<const uint8_t*>(xnkids[i]);
++      if ((kid[0] & 0xF0) == 0) address = memory::load_and_swap<uint32_t>(kid + 4);
++    }
++    targets.push_back(address);
++  }
++  {
++    std::lock_guard<std::mutex> lock(qos::mutex);
++    qos::lookups[qos_guest].allocations.push_back(qos_guest);
++  }
++  *pqos = qos_guest;
++  REXKRNL_INFO("XNetQosLookup({} targets, {} probes)", count, probes);
++
++  std::thread([qos_guest, targets, probes, event_handle] {
++    auto* result = REX_KERNEL_MEMORY()->TranslateVirtual<XNQOS*>(qos_guest);
++    for (size_t i = 0; i < targets.size(); ++i) {
++      std::vector<uint8_t> data;
++      uint32_t received = 0;
++      // Online, room addresses are not reachable outside the online client: it reports its
++      // own measurement of that player instead (no QoS data).
++      int rtt = -1;
++      if (targets[i] && rex::system::net::OnlineEnabled()) {
++        rtt = rex::system::net::OnlinePeerRtt(targets[i]);
++        received = rtt >= 0 ? std::max(probes, 2u) : 0;
++      } else if (targets[i]) {
++        rtt = qos::Probe(targets[i], probes, &data, &received);
++      }
++      XNQOSINFO& info = result->info[i];
++      info.probes_xmit = uint16_t(std::max(probes, 2u));
++      info.probes_recv = uint16_t(received);
++      if (rtt >= 0) {
++        info.rtt_min_in_msecs = uint16_t(rtt);
++        info.rtt_med_in_msecs = uint16_t(rtt);
++        info.up_bits_per_sec = 100000000;
++        info.down_bits_per_sec = 100000000;
++        uint8_t flags = qos::kComplete | qos::kTargetContacted;
++        if (!data.empty()) {
++          uint32_t block = REX_KERNEL_MEMORY()->SystemHeapAlloc(uint32_t(data.size()));
++          std::memcpy(REX_KERNEL_MEMORY()->TranslateVirtual(block), data.data(), data.size());
++          {
++            std::lock_guard<std::mutex> lock(qos::mutex);
++            qos::lookups[qos_guest].allocations.push_back(block);
++          }
++          info.data_ptr = block;
++          info.data_len = uint16_t(data.size());
++          flags |= qos::kDataReceived;
++        }
++        info.flags = flags;
++      } else {
++        info.flags = qos::kComplete;
++      }
++      REXKRNL_INFO("XNetQosLookup: target {}.{}.{}.{} rtt {} ms, {} bytes of data",
++                   targets[i] >> 24, (targets[i] >> 16) & 0xFF, (targets[i] >> 8) & 0xFF,
++                   targets[i] & 0xFF, rtt, data.size());
++      result->count_pending = uint32_t(targets.size() - i - 1);
++    }
++    if (event_handle) {
++      if (auto ev = REX_KERNEL_OBJECTS()->LookupObject<XEvent>(event_handle)) ev->Set(0, false);
++    }
++    std::lock_guard<std::mutex> lock(qos::mutex);
++    auto it = qos::lookups.find(qos_guest);
++    if (it == qos::lookups.end()) return;
++    it->second.done = true;
++    if (it->second.released) {
++      qos::Free(it->second);
++      qos::lookups.erase(it);
++    }
++  }).detach();
++  return 0;
+ }
+ 
+ u32 NetDll_inet_addr_entry(mapped_string addr_ptr) {
+@@ -592,11 +877,11 @@ u32 NetDll_socket_entry(u32 caller, u32 af, u32 type, u32 protocol) {
+     return -1;
+   }
+ 
+-  return socket->handle();
++  return ToGuestSocket(socket->handle());
+ }
+ 
+ u32 NetDll_closesocket_entry(u32 caller, u32 socket_handle) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -611,7 +896,7 @@ u32 NetDll_closesocket_entry(u32 caller, u32 socket_handle) {
+ }
+ 
+ i32 NetDll_shutdown_entry(u32 caller, u32 socket_handle, i32 how) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -632,7 +917,7 @@ i32 NetDll_shutdown_entry(u32 caller, u32 socket_handle, i32 how) {
+ 
+ u32 NetDll_setsockopt_entry(u32 caller, u32 socket_handle, u32 level, u32 optname,
+                             mapped_void optval_ptr, u32 optlen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -644,7 +929,7 @@ u32 NetDll_setsockopt_entry(u32 caller, u32 socket_handle, u32 level, u32 optnam
+ }
+ 
+ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void arg_ptr) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -653,7 +938,7 @@ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void
+ 
+   X_STATUS status = socket->IOControl(cmd, arg_ptr);
+   if (XFAILED(status)) {
+-    XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
++    XThread::SetLastError(rex::system::net::LastError());
+     return -1;
+   }
+ 
+@@ -662,35 +947,34 @@ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void
+ }
+ 
+ u32 NetDll_bind_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> name, u32 namelen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  N_XSOCKADDR_IN native_name(name);
+-  X_STATUS status = socket->Bind(&native_name, namelen);
++  X_STATUS status = socket->Bind(name);
+   if (XFAILED(status)) {
+-    XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
++    XThread::SetLastError(rex::system::net::LastError());
+     return -1;
+   }
+ 
+   return 0;
+ }
+ 
+-u32 NetDll_connect_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> name, u32 namelen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++u32 NetDll_connect_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> name,
++                         u32 namelen) {
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  N_XSOCKADDR native_name(name);
+-  X_STATUS status = socket->Connect(&native_name, namelen);
++  X_STATUS status = socket->Connect(name);
+   if (XFAILED(status)) {
+-    XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
++    XThread::SetLastError(rex::system::net::LastError());
+     return -1;
+   }
+ 
+@@ -698,7 +982,7 @@ u32 NetDll_connect_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> nam
+ }
+ 
+ u32 NetDll_listen_entry(u32 caller, u32 socket_handle, i32 backlog) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -707,14 +991,14 @@ u32 NetDll_listen_entry(u32 caller, u32 socket_handle, i32 backlog) {
+ 
+   X_STATUS status = socket->Listen(backlog);
+   if (XFAILED(status)) {
+-    XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
++    XThread::SetLastError(rex::system::net::LastError());
+     return -1;
+   }
+ 
+   return 0;
+ }
+ 
+-u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> addr_ptr,
++u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> addr_ptr,
+                         mapped_u32 addrlen_ptr) {
+   if (!addr_ptr) {
+     // WSAEFAULT
+@@ -722,23 +1006,20 @@ u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> addr
+     return -1;
+   }
+ 
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  N_XSOCKADDR native_addr(addr_ptr);
+-  int native_len = *addrlen_ptr;
+-  auto new_socket = socket->Accept(&native_addr, &native_len);
++  uint32_t len = 0;
++  auto new_socket = socket->Accept(addr_ptr, &len);
+   if (new_socket) {
+-    addr_ptr->address_family = native_addr.address_family;
+-    std::memcpy(addr_ptr->sa_data, native_addr.sa_data, *addrlen_ptr - 2);
+-    *addrlen_ptr = native_len;
+-
+-    return new_socket->handle();
++    if (addrlen_ptr) *addrlen_ptr = len;
++    return ToGuestSocket(new_socket->handle());
+   } else {
++    XThread::SetLastError(rex::system::net::LastError());
+     return -1;
+   }
+ }
+@@ -762,8 +1043,11 @@ struct host_set {
+         break;
+       }
+       // Convert from Xenia -> native
+-      auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
+-      assert_not_null(socket);
++      auto socket = LookupSocket(socket_handle);
++      if (!socket) {
++        this->count = i;
++        break;
++      }
+       this->sockets[i] = socket;
+     }
+   }
+@@ -772,7 +1056,7 @@ struct host_set {
+     guest_set->fd_count = 0;
+     for (uint32_t i = 0; i < this->count; ++i) {
+       auto socket = this->sockets[i];
+-      guest_set->fd_array[guest_set->fd_count++] = socket->handle();
++      guest_set->fd_array[guest_set->fd_count++] = ToGuestSocket(socket->handle());
+     }
+   }
+ 
+@@ -825,6 +1109,14 @@ i32 NetDll_select_entry(i32 caller, i32 nfds, ppc_ptr_t<x_fd_set> readfds,
+                                              reinterpret_cast<int32_t*>(&timeout.tv_usec));
+     timeout_in = &timeout;
+   }
++  // The guest's nfds is ignored, as by Winsock; POSIX needs the highest descriptor + 1.
++  int max_fd = -1;
++  for (const host_set* set : {&host_readfds, &host_writefds, &host_exceptfds}) {
++    for (uint32_t i = 0; i < set->count; ++i) {
++      max_fd = std::max(max_fd, int(set->sockets[i]->native_handle()));
++    }
++  }
++  nfds = max_fd + 1;
+   int ret = select(nfds, readfds ? &native_readfds : nullptr, writefds ? &native_writefds : nullptr,
+                    exceptfds ? &native_exceptfds : nullptr, timeout_in);
+   if (readfds) {
+@@ -840,83 +1132,94 @@ i32 NetDll_select_entry(i32 caller, i32 nfds, ppc_ptr_t<x_fd_set> readfds,
+     host_exceptfds.Store(exceptfds);
+   }
+ 
+-  // TODO(gibbed): modify ret to be what's actually copied to the guest fd_sets?
+-  return ret;
++  if (ret < 0) {
++    XThread::SetLastError(rex::system::net::LastError());
++    return ret;
++  }
++  return int(host_readfds.count + host_writefds.count + host_exceptfds.count);
+ }
+ 
+ u32 NetDll_recv_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  return socket->Recv(buf_ptr, buf_len, flags);
++  int ret = socket->Recv(buf_ptr, buf_len, flags);
++  if (ret < 0) XThread::SetLastError(rex::system::net::LastError());
++  return ret;
+ }
+ 
+ u32 NetDll_recvfrom_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len,
+                           u32 flags, ppc_ptr_t<XSOCKADDR_IN> from_ptr, mapped_u32 fromlen_ptr) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  N_XSOCKADDR_IN native_from;
+-  if (from_ptr) {
+-    native_from = *from_ptr;
++  XSOCKADDR_IN from{};
++  int ret = socket->RecvFrom(buf_ptr, buf_len, flags, &from);
++  if (ret == -1) {
++    XThread::SetLastError(rex::system::net::LastError());
++    return ret;
+   }
+-  uint32_t native_fromlen = fromlen_ptr ? fromlen_ptr.value() : 0;
+-  int ret =
+-      socket->RecvFrom(buf_ptr, buf_len, flags, &native_from, fromlen_ptr ? &native_fromlen : 0);
+-
+   if (from_ptr) {
+-    from_ptr->sin_family = native_from.sin_family;
+-    from_ptr->sin_port = native_from.sin_port;
+-    from_ptr->sin_addr = native_from.sin_addr;
+-    std::memset(from_ptr->x_sin_zero, 0, sizeof(from_ptr->x_sin_zero));
++    *from_ptr = from;
+   }
+   if (fromlen_ptr) {
+-    *fromlen_ptr = native_fromlen;
+-  }
+-
+-  if (ret == -1) {
+-// TODO: Better way of getting the error code
+-#if REX_PLATFORM_WIN32
+-    uint32_t error_code = WSAGetLastError();
+-    XThread::SetLastError(error_code);
+-#else
+-    XThread::SetLastError(0x0);
+-#endif
++    *fromlen_ptr = sizeof(XSOCKADDR_IN);
+   }
+ 
+   return ret;
+ }
+ 
+ u32 NetDll_send_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  return socket->Send(buf_ptr, buf_len, flags);
++  int ret = socket->Send(buf_ptr, buf_len, flags);
++  if (ret < 0) XThread::SetLastError(rex::system::net::LastError());
++  return ret;
+ }
+ 
+ u32 NetDll_sendto_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags,
+                         ppc_ptr_t<XSOCKADDR_IN> to_ptr, u32 to_len) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = LookupSocket(socket_handle);
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+     return -1;
+   }
+ 
+-  N_XSOCKADDR_IN native_to(to_ptr);
+-  return socket->SendTo(buf_ptr, buf_len, flags, &native_to, to_len);
++  int ret = socket->SendTo(buf_ptr, buf_len, flags, to_ptr ? to_ptr.host_address() : nullptr);
++  if (ret < 0) XThread::SetLastError(rex::system::net::LastError());
++  return ret;
++}
++
++u32 NetDll_getsockname_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> name_ptr,
++                             mapped_u32 namelen_ptr) {
++  auto socket = LookupSocket(socket_handle);
++  if (!socket) {
++    // WSAENOTSOCK
++    XThread::SetLastError(0x2736);
++    return -1;
++  }
++  XSOCKADDR_IN name{};
++  if (socket->GetSockName(&name) < 0) {
++    XThread::SetLastError(rex::system::net::LastError());
++    return -1;
++  }
++  if (name_ptr) *name_ptr = name;
++  if (namelen_ptr) *namelen_ptr = sizeof(XSOCKADDR_IN);
++  return 0;
+ }
+ 
+ u32 NetDll___WSAFDIsSet_entry(u32 socket_handle, ppc_ptr_t<x_fd_set> fd_set) {
+@@ -968,6 +1271,8 @@ REX_EXPORT(__imp__NetDll_XNetDnsRelease, rex::kernel::xam::NetDll_XNetDnsRelease
+ REX_EXPORT(__imp__NetDll_XNetQosServiceLookup, rex::kernel::xam::NetDll_XNetQosServiceLookup_entry)
+ REX_EXPORT(__imp__NetDll_XNetQosRelease, rex::kernel::xam::NetDll_XNetQosRelease_entry)
+ REX_EXPORT(__imp__NetDll_XNetQosListen, rex::kernel::xam::NetDll_XNetQosListen_entry)
++REX_EXPORT(__imp__NetDll_XNetQosLookup, rex::kernel::xam::NetDll_XNetQosLookup_entry)
++REX_EXPORT(__imp__NetDll_getsockname, rex::kernel::xam::NetDll_getsockname_entry)
+ REX_EXPORT(__imp__NetDll_inet_addr, rex::kernel::xam::NetDll_inet_addr_entry)
+ REX_EXPORT(__imp__NetDll_socket, rex::kernel::xam::NetDll_socket_entry)
+ REX_EXPORT(__imp__NetDll_closesocket, rex::kernel::xam::NetDll_closesocket_entry)
+@@ -1040,7 +1345,6 @@ REX_EXPORT_STUB(__imp__NetDll_XNetGetSystemLinkPort);
+ REX_EXPORT_STUB(__imp__NetDll_XNetGetXnAddrPlatform);
+ REX_EXPORT_STUB(__imp__NetDll_XNetInAddrToServer);
+ REX_EXPORT_STUB(__imp__NetDll_XNetQosGetListenStats);
+-REX_EXPORT_STUB(__imp__NetDll_XNetQosLookup);
+ REX_EXPORT_STUB(__imp__NetDll_XNetRegisterKey);
+ REX_EXPORT_STUB(__imp__NetDll_XNetReplaceKey);
+ REX_EXPORT_STUB(__imp__NetDll_XNetServerToInAddr);
+@@ -1098,5 +1402,4 @@ REX_EXPORT_STUB(__imp__NetDll_XnpToolSetCallbacks);
+ REX_EXPORT_STUB(__imp__NetDll_XnpUnregisterKeyForCallerType);
+ REX_EXPORT_STUB(__imp__NetDll_XnpUpdateConfigParams);
+ REX_EXPORT_STUB(__imp__NetDll_getpeername);
+-REX_EXPORT_STUB(__imp__NetDll_getsockname);
+ REX_EXPORT_STUB(__imp__NetDll_getsockopt);
+diff --git a/src/system/xam/user_profile.cpp b/src/system/xam/user_profile.cpp
+index a77f5e6..5b78a8a 100644
+--- a/src/system/xam/user_profile.cpp
++++ b/src/system/xam/user_profile.cpp
+@@ -13,10 +13,47 @@
+ 
+ #include <fmt/format.h>
+ 
++#include <cctype>
++#include <string>
++
++#include <rex/cvar.h>
++#include <rex/platform.h>
++#if REX_PLATFORM_WIN32
++#include <windows.h>
++#else
++#include <unistd.h>
++#endif
+ #include <rex/logging.h>
+ #include <rex/system/kernel_state.h>
+ #include <rex/system/xam/user_profile.h>
+ 
++REXCVAR_DEFINE_STRING(user_name, "", "Profile",
++                      "Gamertag of the signed-in profile, shown to other players in system link "
++                      "games (empty: this computer's host name)");
++
++namespace {
++// Titles tell network players apart by gamertag, so the default is the host name rather than
++// one fixed name for every copy.
++std::string DefaultGamertag() {
++  std::string name = REXCVAR_GET(user_name);
++  if (name.empty()) {
++    char host[256] = {};
++#if REX_PLATFORM_WIN32
++    DWORD size = sizeof(host) - 1;
++    GetComputerNameA(host, &size);
++#else
++    gethostname(host, sizeof(host) - 1);
++#endif
++    for (const char* c = host; *c && *c != '.'; ++c) {
++      if (std::isalnum(static_cast<unsigned char>(*c)) || *c == '-' || *c == '_') name += *c;
++    }
++    if (!name.empty()) name[0] = char(std::toupper(static_cast<unsigned char>(name[0])));
++  }
++  if (name.empty()) name = "User";
++  return name.substr(0, 15);
++}
++}  // namespace
++
+ namespace rex {
+ namespace system {
+ namespace xam {
+@@ -26,7 +63,7 @@ UserProfile::UserProfile() {
+   // if non-zero, it prevents the user from playing the game.
+   // "You do not have permissions to perform this operation."
+   xuid_ = 0xB13EBABEBABEBABE;
+-  name_ = "User";
++  name_ = DefaultGamertag();
+ 
+   // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=gfwl+live&start=195
+   // https://github.com/arkem/py360/blob/master/py360/constants.py
+diff --git a/src/system/xsocket.cpp b/src/system/xsocket.cpp
+index 2d13ac8..c80213b 100644
+--- a/src/system/xsocket.cpp
++++ b/src/system/xsocket.cpp
+@@ -9,7 +9,20 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <algorithm>
++#include <chrono>
++#include <condition_variable>
++#include <ctime>
++#include <deque>
++#include <random>
++#include <thread>
++#include <array>
++#include <atomic>
++#include <cerrno>
++#include <cstdlib>
+ #include <cstring>
++#include <mutex>
++#include <string>
+ 
+ #include <rex/kernel/xam/module.h>
+ #include <rex/platform.h>
+@@ -17,6 +30,9 @@
+ #include <rex/system/xsocket.h>
+ // #include <rex/system/xnet.h>
+ 
++#include <rex/cvar.h>
++#include <rex/logging.h>
++#include <rex/memory.h>
+ #include <rex/net/socket.h>
+ 
+ // Standard socket types used by Xbox API emulation
+@@ -24,21 +40,1357 @@
+ #include <WinSock2.h>
+ 
+ #include <WS2tcpip.h>
++#ifndef MSG_DONTWAIT
++#define MSG_DONTWAIT 0
++#endif
+ #else
+ #include <arpa/inet.h>
+ #include <netinet/in.h>
+ #include <netinet/ip.h>
++#include <netdb.h>
++#include <netinet/tcp.h>
++#include <poll.h>
++#include <sys/ioctl.h>
+ #include <sys/socket.h>
++#include <unistd.h>
+ #endif
+ 
++REXCVAR_DEFINE_STRING(net_address, "", "Network",
++                      "IPv4 address this machine is reached at by other players (empty: the "
++                      "address of the interface with the default route). A loopback address "
++                      "(127.x.y.z) also binds sockets to it, for several instances on one machine");
++REXCVAR_DEFINE_STRING(net_peers, "", "Network",
++                      "Comma-separated IPv4 addresses that broadcasts are sent to instead of the "
++                      "LAN broadcast address (for instances on one machine or networks that drop "
++                      "broadcasts)");
++REXCVAR_DEFINE_BOOL(net_log_packets, false, "Network",
++                    "Log every packet the game sends and receives (diagnostics)");
++REXCVAR_DEFINE_STRING(online, "off", "Network",
++                      "Online play through a Table Tennis online server: off, public (everyone "
++                      "online) or room (a private room, see room_code)");
++REXCVAR_DEFINE_STRING(room_code, "", "Network",
++                      "Private room code for online=room: six letters and digits shared with "
++                      "the other players");
++REXCVAR_DEFINE_STRING(online_server, "", "Network",
++                      "Online server address, host or host:port (default port 27360)");
++REXCVAR_DEFINE_BOOL(online_relay_only, false, "Network",
++                    "Online play: send all match traffic through the server instead of "
++                    "connecting the players directly");
++REXCVAR_DEFINE_INT32(online_utc_offset, -10000, "Network",
++                     "Online play: minutes east of UTC reported to the server for nearby "
++                     "matchmaking (default: this computer's time zone)");
++REXCVAR_DEFINE_INT32(online_test_delay_ms, 0, "Network",
++                     "Online play tests: delay every packet this machine sends by this many ms");
++REXCVAR_DEFINE_INT32(online_test_loss_percent, 0, "Network",
++                     "Online play tests: drop this share of the packets this machine sends");
++REXCVAR_DEFINE_STRING(online_test_burst, "", "Network",
++                      "Online play tests: PERIOD:LENGTH in ms; once per period (at a random "
++                      "moment) every packet this machine sends is dropped for LENGTH ms");
++REXCVAR_DEFINE_STRING(online_redundancy, "auto", "Network",
++                      "Online play: send every match datagram twice to cover lost packets: auto "
++                      "(while the connection to that player loses packets), on or off");
++REXCVAR_DEFINE_INT32(online_redundancy_delay_ms, 80, "Network",
++                     "Online play: the second copy of a datagram goes out this many ms after the "
++                     "first, so a burst of loss does not take both (tests: 20 ms saved a third "
++                     "of the datagrams lost in 60 ms bursts, 80 ms all of them)");
++REXCVAR_DEFINE_INT32(net_port_offset, 10000, "Network",
++                     "Added to every port the game uses, on all machines alike (Linux needs root "
++                     "for ports below 1024)");
++
+ namespace rex::system {
+ 
++namespace net {
++namespace {
++uint32_t ParseAddress(const std::string& text) {
++  in_addr addr{};
++  if (inet_pton(AF_INET, text.c_str(), &addr) != 1) return 0;
++  return ntohl(addr.s_addr);
++}
++
++// The source address the host uses for its default route; no packet is sent.
++uint32_t DefaultRouteAddress() {
++  rex::net::SocketHandle fd = ::socket(AF_INET, SOCK_DGRAM, 0);
++  if (fd < 0) return 0;
++  sockaddr_in to{};
++  to.sin_family = AF_INET;
++  to.sin_port = htons(9);
++  to.sin_addr.s_addr = htonl(0x08080808);
++  uint32_t result = 0;
++  if (::connect(fd, reinterpret_cast<sockaddr*>(&to), sizeof(to)) == 0) {
++    sockaddr_in local{};
++    socklen_t len = sizeof(local);
++    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) == 0) {
++      result = ntohl(local.sin_addr.s_addr);
++    }
++  }
++  rex::net::socket_close(fd);
++  return result;
++}
++
++std::string HexDump(const uint8_t* data, size_t len) {
++  std::string out;
++  for (size_t i = 0; i < len; ++i) out += fmt::format("{:02X}", data[i]);
++  return out;
++}
++
++std::string FormatAddress(uint32_t address) {
++  in_addr addr{}; addr.s_addr=htonl(address);
++  char text[INET_ADDRSTRLEN] = {};
++  inet_ntop(AF_INET, &addr, text, sizeof(text));
++  return text;
++}
++}  // namespace
++
++uint32_t OnlineAddress();
++
++// The machine's own address: net_address, or the source address of the default route.
++uint32_t BaseAddress() {
++  static const uint32_t address = [] {
++    uint32_t result = ParseAddress(REXCVAR_GET(net_address));
++    if (!result) result = DefaultRouteAddress();
++    if (!result) result = INADDR_LOOPBACK;
++    REXKRNL_INFO("XNet: local address {} (port offset {})", FormatAddress(result),
++                 REXCVAR_GET(net_port_offset));
++    return result;
++  }();
++  return address;
++}
++
++uint32_t LocalAddress() {
++  const uint32_t online = OnlineAddress();
++  return online ? online : BaseAddress();
++}
++
++bool BindLocalAddress() {
++  return (BaseAddress() >> 24) == 127;
++}
++
++const std::vector<uint32_t>& BroadcastPeers() {
++  static const std::vector<uint32_t> peers = [] {
++    std::vector<uint32_t> result;
++    std::string list = REXCVAR_GET(net_peers);
++    size_t start = 0;
++    while (start <= list.size()) {
++      size_t end = list.find(',', start);
++      if (end == std::string::npos) end = list.size();
++      if (uint32_t address = ParseAddress(list.substr(start, end - start))) {
++        result.push_back(address);
++        REXKRNL_INFO("XNet: broadcasts go to {}", FormatAddress(address));
++      }
++      start = end + 1;
++    }
++    return result;
++  }();
++  return peers;
++}
++
++uint16_t HostPort(uint16_t guest_port) {
++  if (!guest_port) return 0;
++  return static_cast<uint16_t>(guest_port + REXCVAR_GET(net_port_offset));
++}
++
++uint16_t GuestPort(uint16_t host_port) {
++  if (!host_port) return 0;
++  return static_cast<uint16_t>(host_port - REXCVAR_GET(net_port_offset));
++}
++
++void EthernetAddress(uint32_t address, uint8_t out[6]) {
++  out[0] = 0x02;  // locally administered, unicast
++  out[1] = 0x54;
++  out[2] = static_cast<uint8_t>(address >> 24);
++  out[3] = static_cast<uint8_t>(address >> 16);
++  out[4] = static_cast<uint8_t>(address >> 8);
++  out[5] = static_cast<uint8_t>(address);
++}
++
++namespace {
++std::mutex session_key_mutex;
++std::vector<std::array<uint8_t, 8>> session_keys;
++}  // namespace
++
++namespace {
++constexpr uint32_t kSessionHost = 0x001;
++constexpr uint32_t kSessionUsesMatchmaking = 0x008;
++constexpr uint32_t kSessionJoinInProgressDisabled = 0x400;
++std::mutex hosted_mutex;
++std::array<uint8_t, 60> hosted_lobby{}, hosted_match{};
++bool have_lobby = false, have_match = false;
++uint32_t lobby_flags = 0;
++}  // namespace
++
++void RegisterHostedSession(const uint8_t info[60], uint32_t flags) {
++  std::lock_guard<std::mutex> lock(hosted_mutex);
++  if (flags & kSessionUsesMatchmaking) {
++    std::memcpy(hosted_match.data(), info, 60);
++    have_match = true;
++  } else {
++    std::memcpy(hosted_lobby.data(), info, 60);
++    have_lobby = true;
++    have_match = false;  // a new lobby: any earlier match is over
++    lobby_flags = flags;
++  }
++}
++
++void HostedSessionModified(uint32_t flags) {
++  // The host's lobby is the hosted session without matchmaking (the match session's flags have
++  // the matchmaking bit).
++  if (!(flags & kSessionHost) || (flags & kSessionUsesMatchmaking)) return;
++  std::lock_guard<std::mutex> lock(hosted_mutex);
++  lobby_flags = flags;
++}
++
++bool RewriteSessionAnnouncement(const uint8_t* data, size_t size, std::vector<uint8_t>& out) {
++  // The title's search answer: tag D1 4A at offset 4, message type 0x62 at offset 11.
++  constexpr uint8_t kSearchAnswer = 0x62;
++  if (size < 12 + 60 || data[4] != 0xD1 || data[5] != 0x4A || data[11] != kSearchAnswer) return false;
++  std::lock_guard<std::mutex> lock(hosted_mutex);
++  if (!have_lobby || !have_match || !(lobby_flags & kSessionJoinInProgressDisabled)) return false;
++  const uint8_t* end = data + size;
++  const uint8_t* found = std::search(data, end, hosted_lobby.begin(), hosted_lobby.end());
++  if (found == end) return false;
++  out.assign(data, end);
++  std::memcpy(out.data() + (found - data), hosted_match.data(), 60);
++  static std::atomic<int> logged{0};
++  if (logged.fetch_add(1) < 3) {
++    REXKRNL_INFO("XNet: search answer names match session {:016X} instead of lobby {:016X}",
++                 memory::load_and_swap<uint64_t>(hosted_match.data()),
++                 memory::load_and_swap<uint64_t>(hosted_lobby.data()));
++  }
++  return true;
++}
++
++void RegisterSessionKey(const uint8_t kid[8]) {
++  std::array<uint8_t, 8> key;
++  std::memcpy(key.data(), kid, 8);
++  std::lock_guard<std::mutex> lock(session_key_mutex);
++  session_keys.erase(std::remove(session_keys.begin(), session_keys.end(), key), session_keys.end());
++  session_keys.push_back(key);
++}
++
++void UnregisterSessionKey(const uint8_t kid[8]) {
++  std::array<uint8_t, 8> key;
++  std::memcpy(key.data(), kid, 8);
++  std::lock_guard<std::mutex> lock(session_key_mutex);
++  session_keys.erase(std::remove(session_keys.begin(), session_keys.end(), key), session_keys.end());
++}
++
++namespace {
++// 198.18.0.0/15 is reserved for benchmarking and never used on a LAN.
++constexpr uint32_t kSecureBase = 0xC6120000;
++constexpr uint32_t kSecureCount = 0x20000;
++struct Association {
++  uint32_t real;
++  std::array<uint8_t, 8> kid;
++};
++std::mutex association_mutex;
++std::vector<Association> associations;  // index = address - kSecureBase - 1
++}  // namespace
++
++uint32_t SecureAddress(uint32_t real, const uint8_t kid[8]) {
++  std::lock_guard<std::mutex> lock(association_mutex);
++  for (size_t i = 0; i < associations.size(); ++i) {
++    if (associations[i].real == real && std::memcmp(associations[i].kid.data(), kid, 8) == 0) {
++      return kSecureBase + uint32_t(i) + 1;
++    }
++  }
++  if (associations.size() + 1 >= kSecureCount) return real;
++  Association association{real, {}};
++  std::memcpy(association.kid.data(), kid, 8);
++  associations.push_back(association);
++  const uint32_t address = kSecureBase + uint32_t(associations.size());
++  REXKRNL_INFO("XNet: {} in session {:016X} is {}", FormatAddress(real),
++               memory::load_and_swap<uint64_t>(kid), FormatAddress(address));
++  return address;
++}
++
++bool ResolveSecureAddress(uint32_t address, uint32_t* real, uint8_t kid[8]) {
++  if (address <= kSecureBase || address >= kSecureBase + kSecureCount) return false;
++  std::lock_guard<std::mutex> lock(association_mutex);
++  const size_t index = address - kSecureBase - 1;
++  if (index >= associations.size()) return false;
++  *real = associations[index].real;
++  std::memcpy(kid, associations[index].kid.data(), 8);
++  return true;
++}
++
++bool CurrentSessionKey(uint8_t kid[8]) {
++  std::lock_guard<std::mutex> lock(session_key_mutex);
++  if (session_keys.empty()) return false;
++  std::memcpy(kid, session_keys.back().data(), 8);
++  return true;
++}
++
++uint32_t LastError() {
++#if REX_PLATFORM_WIN32
++  return WSAGetLastError();
++#else
++  switch (errno) {
++    case EINTR: return 10004;         // WSAEINTR
++    case EBADF: return 10009;         // WSAEBADF
++    case EACCES: return 10013;        // WSAEACCES
++    case EFAULT: return 10014;        // WSAEFAULT
++    case EINVAL: return 10022;        // WSAEINVAL
++    case EMFILE: return 10024;        // WSAEMFILE
++#if EAGAIN != EWOULDBLOCK
++    case EAGAIN:
++#endif
++    case EWOULDBLOCK: return 10035;   // WSAEWOULDBLOCK
++    case EINPROGRESS: return 10035;   // non-blocking connect: Winsock reports WSAEWOULDBLOCK
++    case EALREADY: return 10037;      // WSAEALREADY
++    case ENOTSOCK: return 10038;      // WSAENOTSOCK
++    case EDESTADDRREQ: return 10039;  // WSAEDESTADDRREQ
++    case EMSGSIZE: return 10040;      // WSAEMSGSIZE
++    case ENOPROTOOPT: return 10042;   // WSAENOPROTOOPT
++    case EOPNOTSUPP: return 10045;    // WSAEOPNOTSUPP
++    case EADDRINUSE: return 10048;    // WSAEADDRINUSE
++    case EADDRNOTAVAIL: return 10049; // WSAEADDRNOTAVAIL
++    case ENETDOWN: return 10050;      // WSAENETDOWN
++    case ENETUNREACH: return 10051;   // WSAENETUNREACH
++    case ECONNABORTED: return 10053;  // WSAECONNABORTED
++    // A UDP socket reports an ICMP port unreachable as ECONNREFUSED on Linux and as
++    // WSAECONNRESET on Windows and the console.
++    case ECONNREFUSED: return 10054;  // WSAECONNRESET
++    case ECONNRESET: return 10054;    // WSAECONNRESET
++    case ENOBUFS: return 10055;       // WSAENOBUFS
++    case EISCONN: return 10056;       // WSAEISCONN
++    case ENOTCONN: return 10057;      // WSAENOTCONN
++    case ETIMEDOUT: return 10060;     // WSAETIMEDOUT
++    case EHOSTUNREACH: return 10065;  // WSAEHOSTUNREACH
++    default: return 10022;
++  }
++#endif
++}
++
++// --- Online play ----------------------------------------------------------------------------
++// Client of server/ttlink_server.py. All messages start with "TTV1" and a type byte; fields
++// are big-endian. Server messages: HELLO/WELCOME (join a room, get an id, a room address and a
++// token), MEMBERS (the other players: id, room address, token, public and local endpoint,
++// name), KEEPALIVE/STATUS, DATA/RELAYED (datagrams relayed or broadcast to the room), BYE,
++// ERROR. Between players: PUNCH/PUNCH_ACK (open a direct path through both NATs) and DIRECT
++// (a datagram sent straight to the other player).
++namespace {
++constexpr uint8_t kOnlineMagic[4] = {'T', 'T', 'V', '1'};
++enum OnlineMessage : uint8_t {
++  kHello = 1, kWelcome, kMembers, kKeepAlive, kStatus, kData, kRelayed, kBye, kPunch,
++  kPunchAck, kDirect, kError,
++};
++constexpr uint16_t kDefaultServerPort = 27360;
++constexpr uint32_t kOnlineBroadcast = 0xFFFFFFFF;
++constexpr size_t kMaxOnlinePayload = 1400;
++// Source port flag of a tagged match datagram (see OnlineClient::Send); title ports stay below.
++constexpr uint16_t kTaggedPort = 0x8000;
++
++using OnlineClock = std::chrono::steady_clock;
++
++struct Writer {
++  std::vector<uint8_t> data;
++  explicit Writer(uint8_t type) {
++    data.assign(kOnlineMagic, kOnlineMagic + 4);
++    data.push_back(type);
++  }
++  void u8(uint8_t v) { data.push_back(v); }
++  void u16(uint16_t v) { u8(uint8_t(v >> 8)); u8(uint8_t(v)); }
++  void u32(uint32_t v) { u16(uint16_t(v >> 16)); u16(uint16_t(v)); }
++  void u64(uint64_t v) { u32(uint32_t(v >> 32)); u32(uint32_t(v)); }
++  void str(const std::string& v) {
++    const size_t n = std::min<size_t>(v.size(), 255);
++    u8(uint8_t(n));
++    data.insert(data.end(), v.begin(), v.begin() + n);
++  }
++  void bytes(const uint8_t* p, size_t n) { data.insert(data.end(), p, p + n); }
++};
++
++struct Reader {
++  const uint8_t* p;
++  size_t n;
++  size_t pos = 0;
++  bool ok = true;
++  bool need(size_t k) {
++    if (pos + k > n) ok = false;
++    return ok;
++  }
++  uint8_t u8() { return need(1) ? p[pos++] : 0; }
++  uint16_t u16() { uint16_t hi = u8(); return uint16_t((hi << 8) | u8()); }
++  uint32_t u32() { uint32_t hi = u16(); return (hi << 16) | u16(); }
++  uint64_t u64() { uint64_t hi = u32(); return (hi << 32) | u32(); }
++  std::string str() {
++    const size_t k = u8();
++    if (!need(k)) return {};
++    std::string v(reinterpret_cast<const char*>(p + pos), k);
++    pos += k;
++    return v;
++  }
++};
++
++sockaddr_in Endpoint(uint32_t ip, uint16_t port) {
++  sockaddr_in a{};
++  a.sin_family = AF_INET;
++  a.sin_addr.s_addr = htonl(ip);
++  a.sin_port = htons(port);
++  return a;
++}
++
++bool SameEndpoint(const sockaddr_in& a, const sockaddr_in& b) {
++  return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port;
++}
++
++// Sockets the title bound, by guest port, to hand them the datagrams that arrive online.
++std::mutex bound_mutex;
++std::vector<std::pair<uint16_t, XSocket*>> bound_sockets;
++
++class OnlineClient {
++ public:
++  static OnlineClient& Get() {
++    static OnlineClient* client = new OnlineClient();  // lives for the whole process
++    return *client;
++  }
++
++  void Configure(const std::string& mode, const std::string& room) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (mode != mode_ || room != room_) {
++      state_ = mode == "public" || mode == "room" ? "CONNECTING" : "OFF";
++    }
++    mode_ = mode;
++    room_ = room;
++  }
++
++  bool Enabled() {
++    std::lock_guard<std::mutex> lock(mutex_);
++    return mode_ == "public" || mode_ == "room";
++  }
++
++  uint32_t Address() {
++    std::lock_guard<std::mutex> lock(mutex_);
++    return welcomed_ ? vip_ : 0;
++  }
++
++  int PeerRtt(uint32_t vip) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (const auto& peer : peers_) {
++      if (peer.vip != vip) continue;
++      if (peer.rtt_ms >= 0) return int(peer.rtt_ms + 0.5);
++      return server_rtt_ms_ >= 0 ? server_rtt_ms_ * 2 : 100;
++    }
++    return -1;
++  }
++
++  OnlineStatus Status() {
++    std::lock_guard<std::mutex> lock(mutex_);
++    OnlineStatus status;
++    status.mode = mode_;
++    status.room = mode_ == "room" ? room_ : "";
++    status.state = state_;
++    status.connected = welcomed_;
++    status.room_players = welcomed_ ? std::max(room_players_, int(peers_.size()) + 1) : 0;
++    status.players_online = players_online_;
++    status.server_rtt_ms = server_rtt_ms_;
++    status.nearby_players = nearby_players_;
++    const auto now = OnlineClock::now();
++    OnlineClock::time_point latest{};
++    for (const auto& peer : peers_) {
++      (peer.direct && !relay_only_ ? status.direct_peers : status.relayed_peers)++;
++      OnlinePeerQuality quality;
++      quality.name = peer.name;
++      quality.rtt_ms = peer.rtt_ms < 0 ? -1 : int(peer.rtt_ms + 0.5);
++      quality.loss = Loss(peer, now);
++      quality.direct = peer.direct && !relay_only_;
++      quality.redundant = peer.redundant;
++      // The opponent: the member the title sent match traffic to most recently (5 s), or the
++      // only member.
++      if (now - peer.last_game < std::chrono::seconds(5) && peer.last_game > latest) {
++        latest = peer.last_game;
++        status.opponent = int(status.peers.size());
++      }
++      status.peers.push_back(quality);
++    }
++    if (status.opponent < 0 && status.peers.size() == 1) status.opponent = 0;
++    return status;
++  }
++
++  // A datagram from the title: to a room member (directly or relayed) or to the whole room.
++  void Send(uint32_t dest, uint16_t src_port, uint16_t dst_port, const uint8_t* data, size_t len) {
++    if (len > kMaxOnlinePayload) return;
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (!welcomed_ || fd_ < 0) return;
++    const bool broadcast = dest == kOnlineBroadcast || (dest & 0xFF) == 0xFF;
++    if (!broadcast) {
++      for (auto& peer : peers_) {
++        if (peer.vip != dest) continue;
++        peer.last_game = OnlineClock::now();
++        if (!peer.tags || src_port & kTaggedPort || len + 4 > kMaxOnlinePayload) break;
++        // Tagged: the source port gets kTaggedPort and the payload starts with the sequence
++        // number (top bit set on the second copy).
++        const uint32_t seq = ++peer.send_seq & 0x7FFFFFFF;
++        for (const bool second : {false, true}) {
++          if (second && !peer.redundant) break;
++          const bool direct = peer.direct && !relay_only_;
++          Writer w(direct ? kDirect : kData);
++          w.u32(id_);
++          w.u64(token_);
++          if (!direct) w.u32(dest);
++          w.u16(src_port | kTaggedPort);
++          w.u16(dst_port);
++          w.u32(second ? seq | 0x80000000u : seq);
++          w.bytes(data, len);
++          SendRaw(direct ? peer.direct_addr : server_, w.data,
++                  second ? std::max(0, REXCVAR_GET(online_redundancy_delay_ms)) : 0);
++        }
++        return;
++      }
++      for (auto& peer : peers_) {
++        if (peer.vip != dest || !peer.direct || relay_only_) continue;
++        Writer w(kDirect);
++        w.u32(id_);
++        w.u64(token_);
++        w.u16(src_port);
++        w.u16(dst_port);
++        w.bytes(data, len);
++        SendRaw(peer.direct_addr, w.data);
++        return;
++      }
++    }
++    Writer w(kData);
++    w.u32(id_);
++    w.u64(token_);
++    w.u32(broadcast ? kOnlineBroadcast : dest);
++    w.u16(src_port);
++    w.u16(dst_port);
++    w.bytes(data, len);
++    SendRaw(server_, w.data);
++  }
++
++ private:
++  struct Peer {
++    uint32_t id = 0;
++    uint32_t vip = 0;
++    uint64_t token = 0;
++    std::string name;
++    sockaddr_in public_addr{};
++    sockaddr_in local_addr{};
++    sockaddr_in direct_addr{};
++    bool direct = false;
++    OnlineClock::time_point seen;           // first listed
++    OnlineClock::time_point last_punch{};
++    OnlineClock::time_point last_direct{};  // last packet received directly
++    OnlineClock::time_point last_game{};    // last match datagram the title sent to it
++    // Quality: pings once a second over the path in use (port 0 is reserved for them).
++    uint32_t ping_seq = 0;
++    OnlineClock::time_point last_ping{};
++    struct PingRecord {
++      uint32_t seq;
++      OnlineClock::time_point sent;
++      bool answered;
++    };
++    std::deque<PingRecord> pings;  // the last 20
++    double rtt_ms = -1.0;          // smoothed
++    // Tagged datagrams (both sides newer than plain DIRECT/DATA, announced in pings): match
++    // datagrams carry a sequence number so second copies can be sent and dropped on arrival.
++    bool tags = false;
++    uint32_t send_seq = 0;
++    bool receiving = false;        // recv_max is valid
++    uint32_t recv_max = 0;         // highest sequence received
++    uint64_t recv_seen[4] = {};    // the 256 sequences up to recv_max: bit set = received
++    uint32_t window_start = 0;     // loss of first copies from this player, measured over
++    uint32_t window_firsts = 0;    // windows of sequences
++    uint32_t window_delivered = 0; // ... and of datagrams the title got (either copy)
++    int incoming_loss_pct = -1;    // last measurement, sent back in pings; -1 unknown
++    int residual_loss_pct = -1;    // datagrams of which neither copy arrived
++    uint64_t total_expected = 0, total_firsts = 0, total_delivered = 0;  // for the log
++    int reported_loss_pct = -1;    // what the player reports receiving from us
++    OnlineClock::time_point reported_at{};
++    bool redundant = false;        // second copies are being sent
++    OnlineClock::time_point last_loss{};
++  };
++
++  // Share of the recent pings (older than 2 s, so their answers had time) without an answer.
++  static float Loss(const Peer& peer, OnlineClock::time_point now) {
++    int sent = 0, lost = 0;
++    for (const auto& ping : peer.pings) {
++      if (now - ping.sent < std::chrono::seconds(2)) continue;
++      ++sent;
++      if (!ping.answered) ++lost;
++    }
++    return sent ? float(lost) / float(sent) : 0.0f;
++  }
++
++  // Ping/pong between room members, in DIRECT or DATA/RELAYED messages to port 0:
++  // u8 kind (1 ping, 2 pong), u32 sequence, u64 sender's clock in microseconds (echoed).
++  static constexpr uint16_t kControlPort = 0;
++  static uint64_t NowMicros() {
++    return uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
++                        OnlineClock::now().time_since_epoch())
++                        .count());
++  }
++
++  void SendToPeer(const Peer& peer, uint16_t dst_port, const uint8_t* data, size_t len) {
++    if (peer.direct && !relay_only_) {
++      Writer w(kDirect);
++      w.u32(id_);
++      w.u64(token_);
++      w.u16(0);
++      w.u16(dst_port);
++      w.bytes(data, len);
++      SendRaw(peer.direct_addr, w.data);
++    } else {
++      Writer w(kData);
++      w.u32(id_);
++      w.u64(token_);
++      w.u32(peer.vip);
++      w.u16(0);
++      w.u16(dst_port);
++      w.bytes(data, len);
++      SendRaw(server_, w.data);
++    }
++  }
++
++  // Pings and pongs carry two more bytes after the 13 above, which older clients ignore and
++  // leave out of their pongs: bit 0 = speaks tagged datagrams, and the share (percent, 255 =
++  // unknown) of first copies lost on the way from that player.
++  static constexpr uint8_t kTagsCapability = 1;
++  static constexpr size_t kControlSize = 15;
++  void SendPing(Peer& peer, OnlineClock::time_point now) {
++    uint8_t message[kControlSize];
++    message[0] = 1;
++    message[13] = kTagsCapability;
++    message[14] = peer.incoming_loss_pct < 0 ? 255 : uint8_t(peer.incoming_loss_pct);
++    const uint32_t seq = ++peer.ping_seq;
++    const uint64_t t = NowMicros();
++    for (int i = 0; i < 4; ++i) message[1 + i] = uint8_t(seq >> (24 - 8 * i));
++    for (int i = 0; i < 8; ++i) message[5 + i] = uint8_t(t >> (56 - 8 * i));
++    peer.pings.push_back({seq, now, false});
++    while (peer.pings.size() > 20) peer.pings.pop_front();
++    peer.last_ping = now;
++    SendToPeer(peer, kControlPort, message, sizeof(message));
++  }
++
++  void HandleControl(Peer* peer, const uint8_t* data, size_t len) {
++    if (!peer || len < 13) return;
++    if (len >= kControlSize) {
++      peer->tags = (data[13] & kTagsCapability) != 0;
++      if (data[14] <= 100) {
++        peer->reported_loss_pct = data[14];
++        peer->reported_at = OnlineClock::now();
++      }
++    }
++    if (data[0] == 1) {
++      uint8_t reply[kControlSize];
++      std::memcpy(reply, data, 13);
++      reply[0] = 2;
++      reply[13] = kTagsCapability;
++      reply[14] = peer->incoming_loss_pct < 0 ? 255 : uint8_t(peer->incoming_loss_pct);
++      SendToPeer(*peer, kControlPort, reply, sizeof(reply));
++    } else if (data[0] == 2) {
++      uint32_t seq = 0;
++      uint64_t t = 0;
++      for (int i = 0; i < 4; ++i) seq = (seq << 8) | data[1 + i];
++      for (int i = 0; i < 8; ++i) t = (t << 8) | data[5 + i];
++      for (auto& ping : peer->pings) {
++        if (ping.seq != seq || ping.answered) continue;
++        ping.answered = true;
++        const double rtt = double(NowMicros() - t) / 1000.0;
++        peer->rtt_ms = peer->rtt_ms < 0 ? rtt : peer->rtt_ms * 0.8 + rtt * 0.2;
++        break;
++      }
++    }
++  }
++
++  // Test conditions (online_test_delay_ms, online_test_loss_percent): packets wait in a queue
++  // and a sender thread sends them when due.
++  struct Delayed {
++    OnlineClock::time_point due;
++    sockaddr_in to;
++    std::vector<uint8_t> data;
++  };
++  std::mutex delay_mutex_;
++  std::condition_variable delay_cv_;
++  std::deque<Delayed> delayed_;
++  bool delay_thread_ = false;
++
++  void DelayLoop() {
++    std::unique_lock<std::mutex> lock(delay_mutex_);
++    while (true) {
++      if (delayed_.empty()) {
++        delay_cv_.wait(lock);
++        continue;
++      }
++      const auto due = delayed_.front().due;
++      if (OnlineClock::now() < due) {
++        delay_cv_.wait_until(lock, due);
++        continue;
++      }
++      Delayed next = std::move(delayed_.front());
++      delayed_.pop_front();
++      const auto fd = fd_;
++      lock.unlock();
++      WireSend(fd, next.to, next.data);
++      lock.lock();
++    }
++  }
++
++  OnlineClient() {
++    mode_ = REXCVAR_GET(online);
++    room_ = REXCVAR_GET(room_code);
++    std::thread([this] { Run(); }).detach();
++  }
++
++  // Sends now, or after extra_ms (second copies) plus the test delay, from the sender thread.
++  void SendRaw(const sockaddr_in& to, const std::vector<uint8_t>& data, int extra_ms = 0) {
++    const int loss = REXCVAR_GET(online_test_loss_percent);
++    if (loss > 0 && int(std::random_device{}() % 100) < loss) return;
++    const int delay = std::max(0, REXCVAR_GET(online_test_delay_ms)) + extra_ms;
++    if (delay > 0) {
++      std::lock_guard<std::mutex> lock(delay_mutex_);
++      if (!delay_thread_) {
++        delay_thread_ = true;
++        std::thread([this] { DelayLoop(); }).detach();
++      }
++      // Keep the queue in send order (second copies are due later than what follows them).
++      const auto due = OnlineClock::now() + std::chrono::milliseconds(delay);
++      auto it = delayed_.end();
++      while (it != delayed_.begin() && std::prev(it)->due > due) --it;
++      delayed_.insert(it, {due, to, data});
++      delay_cv_.notify_one();
++      return;
++    }
++    WireSend(fd_, to, data);
++  }
++
++  // online_test_burst: within every PERIOD ms, LENGTH ms (starting at a random moment) in
++  // which nothing this machine sends arrives.
++  bool InTestBurst() {
++    const std::string burst = REXCVAR_GET(online_test_burst);
++    if (burst.empty()) return false;
++    const int period = std::atoi(burst.c_str());
++    const size_t colon = burst.find(':');
++    const int length = colon == std::string::npos ? 0 : std::atoi(burst.c_str() + colon + 1);
++    if (period <= 0 || length <= 0) return false;
++    std::lock_guard<std::mutex> lock(burst_mutex_);
++    const auto now = OnlineClock::now();
++    if (now >= burst_period_end_) {
++      burst_period_end_ = now + std::chrono::milliseconds(period);
++      const int start = int(std::random_device{}() % unsigned(std::max(1, period - length)));
++      burst_start_ = now + std::chrono::milliseconds(start);
++      burst_end_ = burst_start_ + std::chrono::milliseconds(length);
++    }
++    return now >= burst_start_ && now < burst_end_;
++  }
++  std::mutex burst_mutex_;
++  OnlineClock::time_point burst_period_end_{}, burst_start_{}, burst_end_{};
++
++  void WireSend(int fd, const sockaddr_in& to, const std::vector<uint8_t>& data) {
++    if (fd < 0 || InTestBurst()) return;
++    sendto(fd, reinterpret_cast<const char*>(data.data()), data.size(), 0,
++           reinterpret_cast<const sockaddr*>(&to), sizeof(to));
++  }
++
++  // Reads the online_server setting; false when none is set or it cannot be resolved.
++  bool ResolveServer() {
++    std::string text = REXCVAR_GET(online_server);
++    if (text.empty()) return false;
++    uint16_t port = kDefaultServerPort;
++    const size_t colon = text.rfind(':');
++    if (colon != std::string::npos) {
++      port = uint16_t(std::atoi(text.c_str() + colon + 1));
++      text.resize(colon);
++    }
++    addrinfo hints{};
++    hints.ai_family = AF_INET;
++    hints.ai_socktype = SOCK_DGRAM;
++    addrinfo* result = nullptr;
++    if (getaddrinfo(text.c_str(), nullptr, &hints, &result) != 0 || !result) return false;
++    server_ = *reinterpret_cast<sockaddr_in*>(result->ai_addr);
++    server_.sin_port = htons(port);
++    freeaddrinfo(result);
++    return true;
++  }
++
++  void Disconnect() {
++    if (fd_ >= 0) {
++      if (welcomed_) {
++        Writer w(kBye);
++        w.u32(id_);
++        w.u64(token_);
++        SendRaw(server_, w.data);
++      }
++      rex::net::socket_close(fd_);
++    }
++    fd_ = -1;
++    welcomed_ = false;
++    resolved_ = false;
++    peers_.clear();
++    room_players_ = 0;
++  }
++
++  void Run() {
++    std::string active_mode, active_room, active_server;
++    uint8_t buffer[2048];
++    while (true) {
++      std::unique_lock<std::mutex> lock(mutex_);
++      const auto now = OnlineClock::now();
++      const bool on = mode_ == "public" || mode_ == "room";
++      const std::string server = REXCVAR_GET(online_server);
++      if (mode_ != active_mode || room_ != active_room || server != active_server) {
++        if (!active_mode.empty() && fd_ >= 0) {
++          REXKRNL_INFO("Online: settings changed ({} {}), reconnecting", mode_, room_);
++        }
++        Disconnect();
++        active_mode = mode_;
++        active_room = room_;
++        active_server = server;
++        hello_nonce_ = (uint64_t(std::random_device{}()) << 32) | std::random_device{}();
++      }
++      relay_only_ = REXCVAR_GET(online_relay_only);
++      if (!on) {
++        state_ = "OFF";
++        lock.unlock();
++        std::this_thread::sleep_for(std::chrono::milliseconds(200));
++        continue;
++      }
++      if (server.empty()) {
++        state_ = "NO SERVER SET";
++        lock.unlock();
++        std::this_thread::sleep_for(std::chrono::milliseconds(500));
++        continue;
++      }
++      if (mode_ == "room" && !ValidRoom(room_)) {
++        state_ = "ENTER A ROOM CODE";
++        lock.unlock();
++        std::this_thread::sleep_for(std::chrono::milliseconds(300));
++        continue;
++      }
++      if (!resolved_) {
++        if (now < next_resolve_) {
++          lock.unlock();
++          std::this_thread::sleep_for(std::chrono::milliseconds(200));
++          continue;
++        }
++        resolved_ = ResolveServer();
++        if (!resolved_) {
++          state_ = "SERVER NOT FOUND";
++          next_resolve_ = now + std::chrono::seconds(10);
++          continue;
++        }
++      }
++      if (fd_ < 0) {
++        fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
++#if REX_PLATFORM_WIN32
++        u_long nonblocking=1;
++        ioctlsocket(fd_,FIONBIO,&nonblocking);
++#endif
++        sockaddr_in local = Endpoint(BindLocalAddress() ? BaseAddress() : INADDR_ANY, 0);
++        bind(fd_, reinterpret_cast<sockaddr*>(&local), sizeof(local));
++        socklen_t len = sizeof(local);
++        getsockname(fd_, reinterpret_cast<sockaddr*>(&local), &len);
++        local_port_ = ntohs(local.sin_port);
++        last_server_ = now;
++        state_ = "CONNECTING";
++      }
++      if (!welcomed_ && now - last_hello_ > std::chrono::seconds(1)) {
++        last_hello_ = now;
++        Writer w(kHello);
++        w.u8(1);  // protocol version
++        w.u64(hello_nonce_);
++        std::string name = rex::cvar::GetFlagByName("user_name");
++        w.str(name.empty() ? "Player" : name);
++        w.str(mode_ == "room" ? room_ : "");
++        w.u32(BaseAddress());
++        w.u16(local_port_);
++        w.u16(uint16_t(int16_t(UtcOffsetMinutes())));
++        SendRaw(server_, w.data);
++        if (now - last_server_ > std::chrono::seconds(10)) state_ = "NO ANSWER FROM SERVER";
++      }
++      if (welcomed_) {
++        if (now - last_keepalive_ > std::chrono::seconds(3)) {
++          last_keepalive_ = now;
++          Writer w(kKeepAlive);
++          w.u32(id_);
++          w.u64(token_);
++          w.u16(server_rtt_ms_ < 0 ? 0xFFFF : uint16_t(std::min(server_rtt_ms_, 0xFFFE)));
++          SendRaw(server_, w.data);
++          keepalive_pending_ = true;
++        }
++        // Pings: every member of a small room, otherwise (public room) the members the match
++        // traffic went to in the last 30 s.
++        for (auto& peer : peers_) {
++          const bool wanted = peers_.size() <= 15 || now - peer.last_game < std::chrono::seconds(30);
++          if (wanted && now - peer.last_ping >= std::chrono::seconds(1)) SendPing(peer, now);
++        }
++        if (now - last_redundancy_check_ >= std::chrono::seconds(1)) {
++          last_redundancy_check_ = now;
++          UpdateRedundancy(now);
++        }
++        if (now - last_quality_log_ > std::chrono::seconds(10)) {
++          last_quality_log_ = now;
++          for (const auto& peer : peers_) {
++            REXKRNL_INFO("Online: {} round trip {} ms, loss {:.0f}% (datagrams from it {}%, "
++                         "both copies {}%; to it {}%), {}{} (server {} ms)",
++                         peer.name, peer.rtt_ms < 0 ? -1 : int(peer.rtt_ms + 0.5),
++                         Loss(peer, now) * 100.0f, peer.incoming_loss_pct,
++                         peer.residual_loss_pct, peer.reported_loss_pct,
++                         peer.direct && !relay_only_ ? "direct" : "through the server",
++                         peer.redundant ? ", sending second copies" : "", server_rtt_ms_);
++            if (peer.total_expected) {
++              const double expected = double(peer.total_expected);
++              REXKRNL_INFO("Online: from {} so far: {} datagrams, first copies lost {:.2f}%, both "
++                           "copies lost {:.2f}%",
++                           peer.name, peer.total_expected,
++                           100.0 * (expected - double(peer.total_firsts)) / expected,
++                           100.0 * (expected - double(peer.total_delivered)) / expected);
++            }
++          }
++        }
++        if (now - last_server_ > std::chrono::seconds(15)) {
++          REXKRNL_WARN("Online: lost the server, reconnecting");
++          welcomed_ = false;
++          peers_.clear();
++          state_ = "RECONNECTING";
++        }
++        Punch(now);
++      }
++      const auto fd = fd_;
++      lock.unlock();
++
++#if REX_PLATFORM_WIN32
++      WSAPOLLFD poll_fd{SOCKET(fd),POLLRDNORM,0};
++      if (WSAPoll(&poll_fd,1,50)<=0) continue;
++#else
++      pollfd poll_fd{int(fd), POLLIN, 0};
++      if (poll(&poll_fd,1,50)<=0) continue;
++#endif
++      while (true) {
++        sockaddr_in from{};
++        socklen_t from_len = sizeof(from);
++        const auto n = recvfrom(fd, reinterpret_cast<char*>(buffer), sizeof(buffer),
++                                   MSG_DONTWAIT, reinterpret_cast<sockaddr*>(&from), &from_len);
++        if (n < 5) break;
++        if (std::memcmp(buffer, kOnlineMagic, 4) != 0) continue;
++        Handle(buffer[4], buffer + 5, size_t(n - 5), from);
++      }
++    }
++  }
++
++  static bool ValidRoom(const std::string& room) {
++    static const char* alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
++    if (room.size() != 6) return false;
++    for (char c : room) {
++      if (!std::strchr(alphabet, c)) return false;
++    }
++    return true;
++  }
++
++  // Opens and keeps direct paths: every new peer gets punches to its public and local
++  // endpoints twice a second for 15 s (then every 5 s); a direct peer gets one every 5 s to
++  // keep the NAT mappings open, and falls back to the relay after 15 s of silence.
++  void Punch(OnlineClock::time_point now) {
++    if (relay_only_) return;
++    for (auto& peer : peers_) {
++      if (peer.direct && now - peer.last_direct > std::chrono::seconds(15)) {
++        REXKRNL_INFO("Online: direct path to {} lost, using the server", peer.name);
++        peer.direct = false;
++      }
++      const auto interval = peer.direct || now - peer.seen > std::chrono::seconds(15)
++                                ? std::chrono::milliseconds(5000)
++                                : std::chrono::milliseconds(500);
++      if (now - peer.last_punch < interval) continue;
++      peer.last_punch = now;
++      Writer w(kPunch);
++      w.u32(id_);
++      w.u64(token_);
++      w.u32(peer.id);
++      if (peer.direct) {
++        SendRaw(peer.direct_addr, w.data);
++      } else {
++        SendRaw(peer.public_addr, w.data);
++        if (peer.local_addr.sin_port && !SameEndpoint(peer.local_addr, peer.public_addr)) {
++          SendRaw(peer.local_addr, w.data);
++        }
++      }
++    }
++  }
++
++  Peer* FindPeer(uint32_t id, uint64_t token) {
++    for (auto& peer : peers_) {
++      if (peer.id == id && peer.token == token) return &peer;
++    }
++    return nullptr;
++  }
++
++  // Strips the tag of a match datagram; false for a copy that already arrived (or one too old
++  // to tell), which the title never sees. Counts first copies for the loss measurement.
++  static bool Untag(Peer& peer, uint16_t& src_port, const uint8_t*& payload, size_t& len) {
++    if (len < 4) return false;
++    const uint32_t word = uint32_t(payload[0]) << 24 | uint32_t(payload[1]) << 16 |
++                          uint32_t(payload[2]) << 8 | payload[3];
++    const bool second = word & 0x80000000u;
++    const uint32_t seq = word & 0x7FFFFFFF;
++    payload += 4;
++    len -= 4;
++    src_port &= uint16_t(~kTaggedPort);
++    constexpr uint32_t kWindow = 256;
++    auto bit = [&](uint32_t s) -> uint64_t& { return peer.recv_seen[(s / 64) % 4]; };
++    if (!peer.receiving || seq > peer.recv_max + 100000 || seq + 100000 < peer.recv_max) {
++      // First datagram, or the sender restarted its numbering.
++      peer.receiving = true;
++      peer.recv_max = seq;
++      std::memset(peer.recv_seen, 0, sizeof(peer.recv_seen));
++      peer.window_start = seq;
++      peer.window_firsts = 0;
++      peer.window_delivered = 0;
++    } else if (seq > peer.recv_max) {
++      for (uint32_t s = peer.recv_max + 1; s <= seq && s - peer.recv_max <= kWindow; ++s) {
++        bit(s) &= ~(uint64_t(1) << (s % 64));
++      }
++      if (seq - peer.recv_max > kWindow) std::memset(peer.recv_seen, 0, sizeof(peer.recv_seen));
++      peer.recv_max = seq;
++    } else if (peer.recv_max - seq >= kWindow) {
++      return false;
++    } else if (bit(seq) & (uint64_t(1) << (seq % 64))) {
++      return false;
++    }
++    bit(seq) |= uint64_t(1) << (seq % 64);
++    if (!second) ++peer.window_firsts;
++    ++peer.window_delivered;
++    return true;
++  }
++
++  // Every second: the share of first copies lost from each player (over at least 50
++  // datagrams), and auto redundancy towards each player. Second copies start when either
++  // side sees loss above 1% (the player's report of our datagrams, or unanswered pings) and
++  // stop after 30 s without any.
++  void UpdateRedundancy(OnlineClock::time_point now) {
++    const std::string mode = REXCVAR_GET(online_redundancy);
++    for (auto& peer : peers_) {
++      if (peer.receiving) {
++        const uint32_t expected = peer.recv_max - peer.window_start;
++        if (expected >= 50) {
++          const uint32_t firsts = std::min(peer.window_firsts, expected);
++          const uint32_t delivered = std::min(peer.window_delivered, expected);
++          peer.incoming_loss_pct = int((expected - firsts) * 100 + expected - 1) / int(expected);
++          peer.residual_loss_pct = int((expected - delivered) * 100 + expected - 1) / int(expected);
++          peer.total_expected += expected;
++          peer.total_firsts += firsts;
++          peer.total_delivered += delivered;
++          peer.window_start = peer.recv_max;
++          peer.window_firsts = 0;
++          peer.window_delivered = 0;
++        }
++      }
++      const bool fresh = peer.reported_loss_pct >= 0 && now - peer.reported_at < std::chrono::seconds(5);
++      const float loss = std::max(fresh ? peer.reported_loss_pct / 100.0f : 0.0f, Loss(peer, now));
++      if (loss > 0.01f) peer.last_loss = now;
++      bool want = false;
++      if (mode == "on") {
++        want = true;
++      } else if (mode != "off") {
++        want = peer.redundant ? now - peer.last_loss < std::chrono::seconds(30) : loss > 0.01f;
++      }
++      want = want && peer.tags;
++      if (want != peer.redundant) {
++        peer.redundant = want;
++        REXKRNL_INFO("Online: {} second copies of match datagrams to {} (loss {:.0f}%, {})",
++                     want ? "sending" : "no longer sending", peer.name, loss * 100.0f,
++                     mode.c_str());
++      }
++    }
++  }
++
++  void MarkDirect(Peer* peer, const sockaddr_in& from) {
++    if (!peer->direct || !SameEndpoint(peer->direct_addr, from)) {
++      REXKRNL_INFO("Online: direct connection to {} ({}:{})", peer->name,
++                   FormatAddress(ntohl(from.sin_addr.s_addr)), ntohs(from.sin_port));
++    }
++    peer->direct = true;
++    peer->direct_addr = from;
++    peer->last_direct = OnlineClock::now();
++  }
++
++  void Handle(uint8_t type, const uint8_t* body, size_t len, const sockaddr_in& from) {
++    Reader r{body, len};
++    uint32_t deliver_from = 0;
++    uint16_t src_port = 0, dst_port = 0;
++    const uint8_t* payload = nullptr;
++    size_t payload_len = 0;
++    {
++      std::lock_guard<std::mutex> lock(mutex_);
++      const bool from_server = SameEndpoint(from, server_);
++      if (from_server) last_server_ = OnlineClock::now();
++      switch (type) {
++        case kWelcome: {
++          if (!from_server) return;
++          id_ = r.u32();
++          vip_ = r.u32();
++          token_ = r.u64();
++          const std::string room = r.str();
++          const uint32_t public_ip = r.u32();
++          const uint16_t public_port = r.u16();
++          if (!r.ok) return;
++          if (!welcomed_) {
++            REXKRNL_INFO("Online: joined {} as {} (seen as {}:{})",
++                         room.empty() ? "the public room" : "room " + room, FormatAddress(vip_),
++                         FormatAddress(public_ip), public_port);
++          }
++          welcomed_ = true;
++          state_ = "CONNECTED";
++          return;
++        }
++        case kMembers: {
++          if (!from_server || !welcomed_) return;
++          const uint16_t total = r.u16();
++          const uint16_t count = r.u16();
++          std::vector<Peer> listed;
++          for (uint16_t i = 0; i < count && r.ok; ++i) {
++            Peer peer;
++            peer.id = r.u32();
++            peer.vip = r.u32();
++            peer.token = r.u64();
++            const uint32_t pub_ip = r.u32();
++            const uint16_t pub_port = r.u16();
++            const uint32_t local_ip = r.u32();
++            const uint16_t local_port = r.u16();
++            peer.name = r.str();
++            peer.public_addr = Endpoint(pub_ip, pub_port);
++            peer.local_addr = Endpoint(local_ip, local_port);
++            listed.push_back(peer);
++          }
++          if (!r.ok) return;
++          room_players_ = total + 1;
++          // One MEMBERS message lists the whole room when it is small; larger rooms arrive in
++          // parts and only add players (the periodic refresh drops those who left).
++          const bool complete = count == total;
++          std::vector<Peer> next;
++          for (auto& peer : listed) {
++            auto it = std::find_if(peers_.begin(), peers_.end(),
++                                   [&](const Peer& p) { return p.id == peer.id; });
++            if (it != peers_.end()) {
++              it->public_addr = peer.public_addr;
++              it->local_addr = peer.local_addr;
++              next.push_back(*it);
++            } else {
++              peer.seen = OnlineClock::now();
++              REXKRNL_INFO("Online: {} is in the room ({})", peer.name, FormatAddress(peer.vip));
++              next.push_back(peer);
++            }
++          }
++          if (!complete) {
++            for (auto& peer : peers_) {
++              if (std::none_of(next.begin(), next.end(),
++                               [&](const Peer& p) { return p.id == peer.id; })) {
++                next.push_back(peer);
++              }
++            }
++          }
++          peers_ = std::move(next);
++          return;
++        }
++        case kStatus: {
++          if (!from_server) return;
++          room_players_ = r.u16();
++          players_online_ = int(r.u32());
++          r.u16();  // rooms
++          const uint16_t nearby = r.u16();
++          if (r.ok) nearby_players_ = nearby;
++          if (keepalive_pending_) {
++            keepalive_pending_ = false;
++            const int rtt = int(std::chrono::duration_cast<std::chrono::milliseconds>(
++                                    OnlineClock::now() - last_keepalive_)
++                                    .count());
++            server_rtt_ms_ = server_rtt_ms_ < 0 ? rtt : (server_rtt_ms_ * 3 + rtt) / 4;
++          }
++          return;
++        }
++        case kError: {
++          if (!from_server) return;
++          const uint8_t code = r.u8();
++          const std::string text = r.str();
++          REXKRNL_WARN("Online: server says: {} ({})", text, code);
++          if (code == 5 /* unknown client */) {
++            welcomed_ = false;
++            peers_.clear();
++            state_ = "RECONNECTING";
++          } else {
++            std::string upper = text;
++            for (auto& c : upper) c = char(std::toupper(static_cast<unsigned char>(c)));
++            state_ = upper;
++          }
++          return;
++        }
++        case kRelayed: {
++          if (!from_server || !welcomed_) return;
++          deliver_from = r.u32();
++          src_port = r.u16();
++          dst_port = r.u16();
++          if (!r.ok) return;
++          payload = body + r.pos;
++          payload_len = len - r.pos;
++          if (dst_port == kControlPort) {
++            for (auto& peer : peers_) {
++              if (peer.vip == deliver_from) HandleControl(&peer, payload, payload_len);
++            }
++            return;
++          }
++          if (src_port & kTaggedPort) {
++            auto it = std::find_if(peers_.begin(), peers_.end(),
++                                   [&](const Peer& p) { return p.vip == deliver_from; });
++            if (it == peers_.end() || !Untag(*it, src_port, payload, payload_len)) return;
++          }
++          break;
++        }
++        case kPunch:
++        case kPunchAck: {
++          if (relay_only_ || !welcomed_) return;
++          const uint32_t id = r.u32();
++          const uint64_t token = r.u64();
++          const uint32_t target = r.u32();
++          Peer* peer = r.ok && target == id_ ? FindPeer(id, token) : nullptr;
++          if (!peer) return;
++          MarkDirect(peer, from);
++          if (type == kPunch) {
++            Writer w(kPunchAck);
++            w.u32(id_);
++            w.u64(token_);
++            w.u32(peer->id);
++            SendRaw(from, w.data);
++          }
++          return;
++        }
++        case kDirect: {
++          if (relay_only_ || !welcomed_) return;
++          const uint32_t id = r.u32();
++          const uint64_t token = r.u64();
++          src_port = r.u16();
++          dst_port = r.u16();
++          Peer* peer = r.ok ? FindPeer(id, token) : nullptr;
++          if (!peer) return;
++          MarkDirect(peer, from);
++          deliver_from = peer->vip;
++          payload = body + r.pos;
++          payload_len = len - r.pos;
++          if (dst_port == kControlPort) {
++            HandleControl(peer, payload, payload_len);
++            return;
++          }
++          if ((src_port & kTaggedPort) && !Untag(*peer, src_port, payload, payload_len)) return;
++          break;
++        }
++        default:
++          return;
++      }
++    }
++    // Hand the datagram to the title's socket bound to that port.
++    std::lock_guard<std::mutex> lock(bound_mutex);
++    for (auto& [port, socket] : bound_sockets) {
++      if (port == dst_port) {
++        socket->DeliverOnline(deliver_from, src_port, payload, payload_len);
++        break;
++      }
++    }
++  }
++
++  OnlineClock::time_point last_redundancy_check_{};
++  std::mutex mutex_;
++  std::string mode_, room_;
++  std::string state_ = "OFF";
++  bool relay_only_ = false;
++  rex::net::SocketHandle fd_ = -1;
++  bool resolved_ = false;
++  bool welcomed_ = false;
++  sockaddr_in server_{};
++  uint16_t local_port_ = 0;
++  uint64_t hello_nonce_ = 0;
++  uint32_t id_ = 0, vip_ = 0;
++  uint64_t token_ = 0;
++  int room_players_ = 0, players_online_ = 0, nearby_players_ = 0;
++  int server_rtt_ms_ = -1;
++  bool keepalive_pending_ = false;
++  OnlineClock::time_point last_quality_log_{};
++  std::vector<Peer> peers_;
++
++  // Minutes east of UTC for the server's nearby matchmaking: the time zone, nothing finer.
++  static int UtcOffsetMinutes() {
++    const int configured = REXCVAR_GET(online_utc_offset);
++    if (configured > -10000) return configured;
++    const std::time_t now = std::time(nullptr);
++    std::tm local{};
++#if REX_PLATFORM_WIN32
++    if (localtime_s(&local,&now)!=0) return 0;
++    return int((_mkgmtime64(&local)-now)/60);
++#else
++    localtime_r(&now,&local);
++    return int(local.tm_gmtoff/60);
++#endif
++  }
++  OnlineClock::time_point last_hello_{}, last_keepalive_{}, last_server_{}, next_resolve_{};
++};
++}  // namespace
++
++uint32_t OnlineAddress() {
++  return OnlineClient::Get().Address();
++}
++
++int OnlinePeerRtt(uint32_t address) {
++  return OnlineEnabled() ? OnlineClient::Get().PeerRtt(address) : -1;
++}
++
++OnlineStatus GetOnlineStatus() {
++  return OnlineClient::Get().Status();
++}
++
++void SetOnline(const std::string& mode, const std::string& room_code) {
++  OnlineClient::Get().Configure(mode, room_code);
++}
++
++bool OnlineEnabled() {
++  return OnlineClient::Get().Enabled();
++}
++
++void OnlineSend(uint32_t dest, uint16_t src_port, uint16_t dst_port, const uint8_t* data,
++                size_t len) {
++  OnlineClient::Get().Send(dest, src_port, dst_port, data, len);
++}
++
++void RegisterBoundSocket(uint16_t port, XSocket* socket) {
++  std::lock_guard<std::mutex> lock(bound_mutex);
++  bound_sockets.erase(std::remove_if(bound_sockets.begin(), bound_sockets.end(),
++                                     [&](const auto& e) { return e.second == socket; }),
++                      bound_sockets.end());
++  if (port) bound_sockets.emplace_back(port, socket);
++}
++}  // namespace net
++
++namespace {
++// Guest XSOCKADDR_IN (big-endian fields) -> host sockaddr_in, with the port mapping applied.
++sockaddr_in ToHost(const XSOCKADDR_IN& guest) {
++  sockaddr_in host{};
++  host.sin_family = AF_INET;
++  host.sin_port = htons(net::HostPort(guest.sin_port));
++  host.sin_addr.s_addr = htonl(guest.sin_addr);
++  return host;
++}
++
++void ToGuest(const sockaddr_in& host, XSOCKADDR_IN* guest) {
++  guest->sin_family = AF_INET;
++  guest->sin_port = net::GuestPort(ntohs(host.sin_port));
++  guest->sin_addr = ntohl(host.sin_addr.s_addr);
++  std::memset(guest->x_sin_zero, 0, sizeof(guest->x_sin_zero));
++}
++
++const char* ProtocolName(XSocket::Protocol proto) {
++  switch (proto) {
++    case XSocket::X_IPPROTO_TCP: return "TCP";
++    case XSocket::X_IPPROTO_UDP: return "UDP";
++    case XSocket::X_IPPROTO_VDP: return "VDP";
++    default: return "?";
++  }
++}
++}  // namespace
++
+ XSocket::XSocket(KernelState* kernel_state) : XObject(kernel_state, kObjectType) {}
+ 
+ XSocket::XSocket(KernelState* kernel_state, uint64_t native_handle)
+     : XObject(kernel_state, kObjectType), native_handle_(native_handle) {}
+ 
+ XSocket::~XSocket() {
++  net::RegisterBoundSocket(0, this);
+   Close();
+ }
+ 
+@@ -48,20 +1400,35 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
+   proto_ = proto;
+ 
+   if (proto == Protocol::X_IPPROTO_VDP) {
+-    // VDP is a layer on top of UDP.
++    // VDP is a layer on top of UDP. Both ends are this runtime and the payload is passed
++    // through unchanged, so plain UDP carries it.
+     proto = Protocol::X_IPPROTO_UDP;
+   }
+ 
+-  native_handle_ = socket(af, type, proto);
+-  if (native_handle_ == -1) {
++  native_handle_ = socket(AF_INET, type == X_SOCK_STREAM ? SOCK_STREAM : SOCK_DGRAM,
++                          proto == X_IPPROTO_TCP ? IPPROTO_TCP
++                          : proto == X_IPPROTO_UDP ? IPPROTO_UDP
++                                                   : 0);
++  if (native_handle_ == uint64_t(-1)) {
+     return X_STATUS_UNSUCCESSFUL;
+   }
++  if (type == X_SOCK_DGRAM) {
++    // System link discovery broadcasts; let every datagram socket send them, as the console
++    // does for VDP sockets.
++    int on = 1;
++    setsockopt(native_handle_, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<char*>(&on), sizeof(on));
++  }
+ 
+   return X_STATUS_SUCCESS;
+ }
+ 
+ X_STATUS XSocket::Close() {
++  net::RegisterBoundSocket(0, this);
++  if (native_handle_ == uint64_t(-1)) {
++    return X_STATUS_SUCCESS;
++  }
+   int ret = rex::net::socket_close(native_handle_);
++  native_handle_ = uint64_t(-1);
+   if (ret != 0) {
+     return X_STATUS_UNSUCCESSFUL;
+   }
+@@ -70,38 +1437,77 @@ X_STATUS XSocket::Close() {
+ }
+ 
+ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr, uint32_t optlen) {
+-  if (level == 0xFFFF && (optname == 0x5801 || optname == 0x5802)) {
+-    // Disable socket encryption
+-    secure_ = false;
+-    return X_STATUS_SUCCESS;
+-  }
++  // Values are guest (big-endian) integers.
++  auto guest_int = [&]() -> int {
++    if (optlen >= 4) return static_cast<int>(rex::byte_swap(*static_cast<uint32_t*>(optval_ptr)));
++    if (optlen >= 1) return *static_cast<uint8_t*>(optval_ptr);
++    return 0;
++  };
+ 
+-  int ret = setsockopt(native_handle_, level, optname, (char*)optval_ptr, optlen);
+-  if (ret < 0) {
+-    // TODO: WSAGetLastError()
+-    return X_STATUS_UNSUCCESSFUL;
++  if (level == 0xFFFF) {  // SOL_SOCKET (Winsock values)
++    int native_name = -1;
++    switch (optname) {
++      case 0x0004: native_name = SO_REUSEADDR; break;
++      case 0x0008: native_name = SO_KEEPALIVE; break;
++      case 0x0020: native_name = SO_BROADCAST; break;
++      case 0x1001: native_name = SO_SNDBUF; break;
++      case 0x1002: native_name = SO_RCVBUF; break;
++      case 0x5801:  // SO_MARKINSECURE: plain sockets here already
++      case 0x5802:  // SO_DECRYPTSOCK
++        secure_ = false;
++        return X_STATUS_SUCCESS;
++      default:
++        REXKRNL_INFO("XSocket: option {:04X}:{:04X} ignored", level, optname);
++        return X_STATUS_SUCCESS;
++    }
++    int value = guest_int();
++    if (setsockopt(native_handle_, SOL_SOCKET, native_name, reinterpret_cast<char*>(&value),
++                   sizeof(value)) < 0) {
++      return X_STATUS_UNSUCCESSFUL;
++    }
++    if (optname == 0x0020) {
++      broadcast_socket_ = value != 0;
++    }
++    return X_STATUS_SUCCESS;
+   }
+-
+-  // SO_BROADCAST
+-  if (level == 0xFFFF && optname == 0x0020) {
+-    broadcast_socket_ = true;
++  if (level == IPPROTO_TCP && optname == 0x0001) {  // TCP_NODELAY
++    int value = guest_int();
++    if (setsockopt(native_handle_, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value),
++                   sizeof(value)) < 0) {
++      return X_STATUS_UNSUCCESSFUL;
++    }
++    return X_STATUS_SUCCESS;
+   }
+-
++  REXKRNL_INFO("XSocket: option {:04X}:{:04X} ignored", level, optname);
+   return X_STATUS_SUCCESS;
+ }
+ 
+ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
+-  int ret = rex::net::socket_ioctl(native_handle_, cmd, arg_ptr);
+-  if (ret < 0) {
+-    // TODO: Get last error
+-    return X_STATUS_UNSUCCESSFUL;
++  if (cmd == 0x8004667E) {  // FIONBIO with a guest (big-endian) u_long
++    int value = arg_ptr ? rex::byte_swap(*reinterpret_cast<uint32_t*>(arg_ptr)) != 0 : 0;
++    nonblocking_ = value != 0;
++    if (rex::net::socket_ioctl(native_handle_, FIONBIO, reinterpret_cast<uint8_t*>(&value)) < 0) {
++      return X_STATUS_UNSUCCESSFUL;
++    }
++    return X_STATUS_SUCCESS;
+   }
+-
+-  return X_STATUS_SUCCESS;
++  if (cmd == 0x4004667F) {  // FIONREAD
++    int value = 0;
++    if (rex::net::socket_ioctl(native_handle_, FIONREAD, reinterpret_cast<uint8_t*>(&value)) < 0) {
++      return X_STATUS_UNSUCCESSFUL;
++    }
++    if (arg_ptr) *reinterpret_cast<uint32_t*>(arg_ptr) = rex::byte_swap(uint32_t(value));
++    return X_STATUS_SUCCESS;
++  }
++  REXKRNL_WARN("XSocket: ioctl {:08X} unsupported", cmd);
++  return X_STATUS_UNSUCCESSFUL;
+ }
+ 
+-X_STATUS XSocket::Connect(N_XSOCKADDR* name, int name_len) {
+-  int ret = connect(native_handle_, (sockaddr*)name, name_len);
++X_STATUS XSocket::Connect(const XSOCKADDR_IN* name) {
++  sockaddr_in to = ToHost(*name);
++  REXKRNL_INFO("XSocket {:X}: connect to {}:{}", handle(), net::FormatAddress(ntohl(to.sin_addr.s_addr)),
++               ntohs(to.sin_port));
++  int ret = connect(native_handle_, reinterpret_cast<sockaddr*>(&to), sizeof(to));
+   if (ret < 0) {
+     return X_STATUS_UNSUCCESSFUL;
+   }
+@@ -109,14 +1515,23 @@ X_STATUS XSocket::Connect(N_XSOCKADDR* name, int name_len) {
+   return X_STATUS_SUCCESS;
+ }
+ 
+-X_STATUS XSocket::Bind(N_XSOCKADDR_IN* name, int name_len) {
+-  int ret = bind(native_handle_, (sockaddr*)name, name_len);
++X_STATUS XSocket::Bind(const XSOCKADDR_IN* name) {
++  sockaddr_in host = ToHost(*name);
++  if (host.sin_addr.s_addr == htonl(INADDR_ANY) && net::BindLocalAddress()) {
++    host.sin_addr.s_addr = htonl(net::BaseAddress());
++  }
++  int ret = bind(native_handle_, reinterpret_cast<sockaddr*>(&host), sizeof(host));
++  REXKRNL_INFO("XSocket {:X}: {} bind {}:{} -> host {}:{} {}", handle(), ProtocolName(proto_),
++               net::FormatAddress(name->sin_addr), uint16_t(name->sin_port),
++               net::FormatAddress(ntohl(host.sin_addr.s_addr)), ntohs(host.sin_port),
++               ret < 0 ? std::strerror(errno) : "ok");
+   if (ret < 0) {
+     return X_STATUS_UNSUCCESSFUL;
+   }
+ 
+   bound_ = true;
+   bound_port_ = name->sin_port;
++  if (type_ == X_SOCK_DGRAM) net::RegisterBoundSocket(bound_port_, this);
+ 
+   return X_STATUS_SUCCESS;
+ }
+@@ -130,18 +1545,16 @@ X_STATUS XSocket::Listen(int backlog) {
+   return X_STATUS_SUCCESS;
+ }
+ 
+-object_ref<XSocket> XSocket::Accept(N_XSOCKADDR* name, int* name_len) {
+-  sockaddr n_sockaddr;
+-  socklen_t n_name_len = sizeof(sockaddr);
+-  uintptr_t ret = accept(native_handle_, &n_sockaddr, &n_name_len);
++object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, uint32_t* name_len) {
++  sockaddr_in from{};
++  socklen_t from_len = sizeof(from);
++  auto ret = accept(native_handle_, reinterpret_cast<sockaddr*>(&from), &from_len);
+   if (ret == -1) {
+-    std::memset(name, 0, *name_len);
+-    *name_len = 0;
+     return nullptr;
+   }
+ 
+-  std::memcpy(name, &n_sockaddr, n_name_len);
+-  *name_len = n_name_len;
++  if (name) ToGuest(from, name);
++  if (name_len) *name_len = sizeof(XSOCKADDR_IN);
+ 
+   // Create a kernel object to represent the new socket, and copy parameters
+   // over.
+@@ -157,79 +1570,202 @@ int XSocket::Shutdown(int how) {
+   return shutdown(native_handle_, how);
+ }
+ 
++int XSocket::GetSockName(XSOCKADDR_IN* name) {
++  sockaddr_in local{};
++  socklen_t len = sizeof(local);
++  int ret = getsockname(native_handle_, reinterpret_cast<sockaddr*>(&local), &len);
++  if (ret < 0) return ret;
++  ToGuest(local, name);
++  return 0;
++}
++
+ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
+   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
+ }
+ 
+-int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_IN* from,
+-                      uint32_t* from_len) {
+-  // Pop from secure packets first
+-  // TODO(DrChat): Enable when I commit XNet
+-  /*
+-  {
+-    std::lock_guard<std::mutex> lock(incoming_packet_mutex_);
+-    if (incoming_packets_.size()) {
+-      packet* pkt = (packet*)incoming_packets_.front();
+-      int data_len = pkt->data_len;
+-      std::memcpy(buf, pkt->data, std::min((uint32_t)pkt->data_len, buf_len));
++namespace {
++// Packets between security associations (see net::SecureAddress) carry the session XNKID and
++// the sender's own address (the one in its XNADDR) in front of the title's data, so the receiver
++// can tell which association a packet belongs to, also when a machine with several addresses
++// sends from another one than it advertises.
++constexpr uint8_t kTagMagic[4] = {'T', 'T', 'S', 'A'};
++constexpr size_t kTagSize = 16;
+ 
+-      from->sin_family = 2;
+-      from->sin_addr = pkt->src_ip;
+-      from->sin_port = pkt->src_port;
++void LogPacket(const char* what, uint32_t handle, size_t len, uint32_t address, uint16_t port,
++               const uint8_t* data) {
++  if (!REXCVAR_GET(net_log_packets)) return;
++  REXKRNL_INFO("XSocket {:X}: {} {} bytes {} {}:{}: {}", handle, what, len,
++               what[0] == 's' ? "to" : "from", net::FormatAddress(address), port,
++               net::HexDump(data, std::min<size_t>(len, 320)));
++}
+ 
+-      incoming_packets_.pop();
+-      uint8_t* pkt_ui8 = (uint8_t*)pkt;
+-      delete[] pkt_ui8;
++void LogFirstContact(const char* what, uint32_t handle, uint32_t address, uint16_t port,
++                     size_t len) {
++  static std::mutex mutex;
++  static std::vector<uint64_t> seen;
++  const uint64_t key = (uint64_t(address) << 17) | (uint64_t(what[0] == 's') << 16) | port;
++  std::lock_guard<std::mutex> lock(mutex);
++  if (std::find(seen.begin(), seen.end(), key) != seen.end()) return;
++  seen.push_back(key);
++  REXKRNL_INFO("XSocket {:X}: first packet {} {}:{} ({} bytes)", handle,
++               what[0] == 's' ? "to" : "from", net::FormatAddress(address), port, len);
++}
++}  // namespace
+ 
+-      return data_len;
++int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, XSOCKADDR_IN* from) {
++  if (type_ != X_SOCK_DGRAM) {
++    sockaddr_in nfrom{};
++    socklen_t nfromlen = sizeof(nfrom);
++    int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
++                       reinterpret_cast<sockaddr*>(&nfrom), &nfromlen);
++    if (ret >= 0 && from) ToGuest(nfrom, from);
++    return ret;
++  }
++  std::vector<uint8_t> packet;
++  sockaddr_in nfrom{};
++  int ret = -1;
++  if (net::OnlineEnabled()) {
++    // Online: datagrams come from the online client's queue only, never from the LAN.
++    while (true) {
++      {
++        std::lock_guard<std::mutex> lock(online_mutex_);
++        if (!online_packets_.empty()) {
++          OnlinePacket& next = online_packets_.front();
++          packet = std::move(next.data);
++          nfrom.sin_family = AF_INET;
++          nfrom.sin_addr.s_addr = htonl(next.source);
++          nfrom.sin_port = htons(net::HostPort(next.source_port));
++          if (!(flags & MSG_PEEK)) online_packets_.pop();
++          break;
++        }
++      }
++      if (nonblocking_ || (flags & MSG_DONTWAIT)) {
++        errno = EWOULDBLOCK;
++#if REX_PLATFORM_WIN32
++        WSASetLastError(WSAEWOULDBLOCK);
++#endif
++        return -1;
++      }
++      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+     }
++    ret = int(packet.size());
++  } else {
++    packet.resize(size_t(buf_len) + kTagSize);
++    socklen_t nfromlen = sizeof(sockaddr_in);
++    ret = recvfrom(native_handle_, reinterpret_cast<char*>(packet.data()),
++                   uint32_t(packet.size()), flags, reinterpret_cast<sockaddr*>(&nfrom),
++                   &nfromlen);
++    if (ret < 0) return ret;
+   }
+-  */
+-
+-  sockaddr_in nfrom;
+-  socklen_t nfromlen = sizeof(sockaddr_in);
+-  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
+-                     (sockaddr*)&nfrom, &nfromlen);
++  const uint32_t source = ntohl(nfrom.sin_addr.s_addr);
++  const uint8_t* data = packet.data();
++  size_t len = size_t(ret);
++  uint32_t guest_source = source;
++  if (len >= kTagSize && std::memcmp(data, kTagMagic, 4) == 0) {
++    const uint32_t advertised = memory::load_and_swap<uint32_t>(data + 12);
++    guest_source = net::SecureAddress(advertised ? advertised : source, data + 4);
++    data += kTagSize;
++    len -= kTagSize;
++  }
++  const size_t copied = std::min<size_t>(len, buf_len);
++  std::memcpy(buf, data, copied);
+   if (from) {
+-    from->sin_family = nfrom.sin_family;
+-    from->sin_addr = ntohl(nfrom.sin_addr.s_addr);  // BE <- BE
+-    from->sin_port = nfrom.sin_port;
+-    std::memset(from->x_sin_zero, 0, sizeof(from->x_sin_zero));
++    ToGuest(nfrom, from);
++    from->sin_addr = guest_source;
+   }
+-
+-  if (from_len) {
+-    *from_len = nfromlen;
++  LogPacket("recv", handle(), len, source, ntohs(nfrom.sin_port), buf);
++  LogFirstContact("recv", handle(), source, ntohs(nfrom.sin_port), len);
++  if (len > buf_len) {
++    errno = EMSGSIZE;
++#if REX_PLATFORM_WIN32
++    WSASetLastError(WSAEMSGSIZE);
++#endif
++    return -1;
+   }
++  return int(copied);
++}
+ 
+-  return ret;
++void XSocket::DeliverOnline(uint32_t source, uint16_t source_port, const uint8_t* data,
++                            size_t len) {
++  std::lock_guard<std::mutex> lock(online_mutex_);
++  if (online_packets_.size() >= 512) return;  // the title stopped reading: drop, as UDP does
++  online_packets_.push(OnlinePacket{source, source_port, std::vector<uint8_t>(data, data + len)});
+ }
+ 
+ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
+   return send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags);
+ }
+ 
+-int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_IN* to,
+-                    uint32_t to_len) {
+-  // Send 2 copies of the packet: One to XNet (for network security) and an
+-  // unencrypted copy for other Xenia hosts.
+-  // TODO(DrChat): Enable when I commit XNet.
+-  /*
+-  auto xam = kernel_state()->GetKernelModule<xam::XamModule>("xam.xex");
+-  auto xnet = xam->xnet();
+-  if (xnet) {
+-    xnet->SendPacket(this, to, buf, buf_len);
++int XSocket::SendTo(const uint8_t* buf, uint32_t buf_len, uint32_t flags, const XSOCKADDR_IN* to) {
++  std::vector<uint8_t> rewritten;
++  if (type_ == X_SOCK_DGRAM && net::RewriteSessionAnnouncement(buf, buf_len, rewritten)) {
++    buf = rewritten.data();
++  }
++  if (!to) {
++    return send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags);
++  }
++  sockaddr_in nto = ToHost(*to);
++  uint32_t dest = ntohl(nto.sin_addr.s_addr);
++  uint8_t kid[8];
++  uint32_t real = 0;
++
++  if (type_ == X_SOCK_DGRAM && net::OnlineEnabled()) {
++    // Online: through the online client to a room member (or the whole room).
++    std::vector<uint8_t> packet;
++    if (net::ResolveSecureAddress(dest, &real, kid)) {
++      packet.resize(kTagSize + buf_len);
++      std::memcpy(packet.data(), kTagMagic, 4);
++      std::memcpy(packet.data() + 4, kid, 8);
++      memory::store_and_swap<uint32_t>(packet.data() + 12, net::LocalAddress());
++      std::memcpy(packet.data() + kTagSize, buf, buf_len);
++      dest = real;
++    } else {
++      packet.assign(buf, buf + buf_len);
++    }
++    LogPacket("send", handle(), buf_len, dest, to->sin_port, buf);
++    net::OnlineSend(dest, bound_port_, to->sin_port, packet.data(), packet.size());
++    return int(buf_len);
+   }
+-  */
+ 
+-  sockaddr_in nto;
+-  if (to) {
+-    nto.sin_addr.s_addr = to->sin_addr;
+-    nto.sin_family = to->sin_family;
+-    nto.sin_port = to->sin_port;
++  // A security association address: send to the peer's real address with the session tag.
++  if (net::ResolveSecureAddress(dest, &real, kid)) {
++    std::vector<uint8_t> packet(kTagSize + buf_len);
++    std::memcpy(packet.data(), kTagMagic, 4);
++    std::memcpy(packet.data() + 4, kid, 8);
++    memory::store_and_swap<uint32_t>(packet.data() + 12, net::LocalAddress());
++    std::memcpy(packet.data() + kTagSize, buf, buf_len);
++    nto.sin_addr.s_addr = htonl(real);
++    LogPacket("send", handle(), buf_len, real, ntohs(nto.sin_port), buf);
++    LogFirstContact("send", handle(), real, ntohs(nto.sin_port), buf_len);
++    int ret = sendto(native_handle_, reinterpret_cast<const char*>(packet.data()),
++                     packet.size(), flags, reinterpret_cast<sockaddr*>(&nto), sizeof(nto));
++    return ret < 0 ? ret : int(buf_len);
+   }
+ 
+-  return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
+-                to ? (sockaddr*)&nto : nullptr, to_len);
++  LogPacket("send", handle(), buf_len, dest, ntohs(nto.sin_port), buf);
++  const bool broadcast = dest == INADDR_BROADCAST || (dest & 0xFF) == 0xFF;
++  if (broadcast) {
++    static std::atomic<int> broadcasts{0};
++    if (broadcasts++ < 3) {
++      REXKRNL_INFO("XSocket {:X}: broadcast {} bytes to port {}", handle(), buf_len,
++                   ntohs(nto.sin_port));
++    }
++    if (!net::BroadcastPeers().empty()) {
++      // Test and broadcast-less setups: deliver to each configured peer instead.
++      int ret = -1;
++      for (uint32_t peer : net::BroadcastPeers()) {
++        nto.sin_addr.s_addr = htonl(peer);
++        int sent = sendto(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags,
++                          reinterpret_cast<sockaddr*>(&nto), sizeof(nto));
++        if (sent >= 0) ret = sent;
++      }
++      return ret;
++    }
++  } else {
++    LogFirstContact("send", handle(), dest, ntohs(nto.sin_port), buf_len);
++  }
++  return sendto(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags,
++                reinterpret_cast<sockaddr*>(&nto), sizeof(nto));
+ }
+ 
+ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf, size_t len) {

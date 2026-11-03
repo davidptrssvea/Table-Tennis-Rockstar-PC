@@ -1,0 +1,3 @@
+Achievement UI, PlayStation prompt code/art, game networking and relay adapted from ThisIsAkill/Table-Tennis-Linux, commit 7bff91c561fa0e424562c6d851b9008e9fc9511e (MIT).
+https://github.com/ThisIsAkill/Table-Tennis-Linux
+Windows integration and frame-pacing adaptations by this project.

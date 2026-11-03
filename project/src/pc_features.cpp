@@ -1,5 +1,6 @@
 #include "generated/default/tabletennis_init.h"
 #include "pc_features.h"
+#include "system_link.h"
 #include "screen_layout.h"
 #include <atomic>
 #include <array>
@@ -7,10 +8,13 @@
 #include <cstring>
 #include <algorithm>
 #include <windows.h>
+#include <mutex>
 #include <rex/logging.h>
 namespace tabletennis::pc {
 namespace {
 std::atomic<HWND> game_window{nullptr};
+std::mutex toggle_mutex;
+std::function<void()> achievement_toggle;
 std::atomic<bool> quit_posted{false};
 std::atomic<double> aspect{16.0 / 9.0};
 std::atomic<uint32_t> device{0};
@@ -26,6 +30,15 @@ void StoreFloat(uint8_t* base, uint32_t address, float value) {
 }
 }
 void SetWindow(void* window) { game_window.store(static_cast<HWND>(window)); }
+double OverlayAspect() { return 16.0 / 9.0; }
+void ToggleAchievements() {
+  std::function<void()> callback;
+  {std::lock_guard lock(toggle_mutex);callback=achievement_toggle;}
+  if(callback) callback();
+}
+void SetAchievementsToggle(std::function<void()> callback) {
+  std::lock_guard lock(toggle_mutex);achievement_toggle=std::move(callback);
+}
 void SetSurfaceSize(uint32_t width, uint32_t height) {
   if(!width || !height) return; // keep the last valid ratio while minimized
   aspect.store(layout::Aspect(width,height));
@@ -65,6 +78,10 @@ void Scissor(PPCContext& ctx) {
 }
 void CheckQuit(PPCContext& ctx, uint8_t* base, uint32_t movie) {
   if (!movie || quit_posted.load()) return;
+#if defined(TT_COMMUNITY_NETWORK)
+  tabletennis::lan::PollFrontend(ctx,base,movie);
+  return; // The extended menu has three distinct state-91 rows, even offline.
+#endif
   auto read = [&](uint32_t name) -> uint32_t {
     PPCContext query=ctx;query.r3.u64=movie;query.r4.u64=name;
     sub_823F9280(query,base);

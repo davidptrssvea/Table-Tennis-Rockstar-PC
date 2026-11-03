@@ -140,9 +140,11 @@ def main():
     sdk = find_sdk(args.sdk, args.no_download)
     print('STAGE:Preparing your local game files', flush=True)
     extract(iso, ROOT)
-    patch_menu(ROOT / 'dist/assets/resource/flash/flash.rpf')
+    patch_menu(ROOT / 'dist/assets/resource/flash/flash.rpf', online=(sdk / '.tabletennis-community-sdk').is_file())
     print('STAGE:Generating your local game', flush=True)
-    run([sdk / 'bin/rexglue.exe', 'codegen', ROOT / 'project/tabletennis_manifest.toml'], cwd=ROOT)
+    # Existing generated files may contain native edits from an older release.
+    # Recreate the supported input before applying the current hash-checked rules.
+    run([sdk / 'bin/rexglue.exe', 'codegen', ROOT / 'project/tabletennis_manifest.toml', '--ignore-stamp'], cwd=ROOT)
     patch_native(ROOT / 'project/generated/default')
     if args.prepare_only:
         print('Preparation complete. Original-derived files remain local and ignored by Git.', flush=True)
@@ -166,6 +168,11 @@ def main():
     shutil.copytree(ROOT / 'licenses', dist / 'licenses', dirs_exist_ok=True)
     if (sdk / 'licenses').exists():
         shutil.copytree(sdk / 'licenses', dist / 'licenses/SDK', dirs_exist_ok=True)
+    engine_marker = dist / 'community-engine.json'
+    if (sdk / '.tabletennis-community-sdk').is_file():
+        shutil.copy2(sdk / '.tabletennis-community-sdk', engine_marker)
+    elif engine_marker.exists():
+        engine_marker.unlink()
     # Preserve existing graphics settings; write the current user's ISO only on this PC.
     settings = dist / 'settings.ini'
     if not settings.exists():

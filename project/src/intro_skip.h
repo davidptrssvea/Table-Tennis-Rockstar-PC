@@ -13,6 +13,7 @@ bool ShowTransition();
 // True once the startup sequence no longer needs PollGamepads/ShowTransition
 // on the UI thread (UI thread only).
 bool UiWorkFinished();
+bool MainMenuReached();
 bool SkipMovies();
 void AdvanceIntroMovie(PPCContext& ctx, uint8_t* base);
 bool AdvanceFrontendMovie(PPCContext& ctx, uint8_t* base);

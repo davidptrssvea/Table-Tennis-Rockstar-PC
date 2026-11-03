@@ -7,6 +7,8 @@
 #include "offline_menu_device.h"
 #include "intro_skip.h"
 #include "pc_features.h"
+#include "achievement_ui.h"
+#include "button_prompts.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
 #ifndef WIN32_LEAN_AND_MEAN
@@ -103,42 +105,35 @@ inline void SetPluginFlag(const char* name, const char* value) {
 // The stock toast dialog stays attached to the ImGui drawer for the whole
 // session, which makes the presenter repaint on every display refresh (see
 // StartupDialog). Attach it only while a toast can be on screen.
-class OnDemandToastDialog : public rex::ui::AchievementToastDialog {
+class OnDemandToastDialog : public tabletennis::achievement_ui::AchievementToast {
  public:
-  OnDemandToastDialog(rex::ui::WindowedAppContext& app_context, rex::ui::ImGuiDrawer* drawer,
-                      rex::ui::ImmediateDrawer* immediate_drawer, rex::Runtime* runtime)
-      : AchievementToastDialog(drawer, immediate_drawer, runtime), app_context_(app_context) {
-    imgui_drawer()->RemoveDialog(this);  // The base constructor attached it.
+  OnDemandToastDialog(rex::ui::WindowedAppContext& context,rex::ui::ImGuiDrawer* drawer,
+      rex::ui::ImmediateDrawer* immediate,rex::Runtime* runtime,
+      rex::system::AchievementManager* manager,rex::ui::Window* window)
+      : AchievementToast(drawer,immediate,runtime,manager,window),context_(context) {
+    if (HasPendingWork()) { attached_=true; tabletennis::pacing::SetUiActive(true); }
+    else imgui_drawer()->RemoveDialog(this);
   }
-
   void Push(const rex::system::AchievementEvent& event) override {
-    AchievementToastDialog::Push(event);
-    app_context_.CallInUIThreadDeferred([this]() {
-      // Toasts are shown one after another for 4.5 s each.
-      const auto now = std::chrono::steady_clock::now();
-      visible_until_ = std::max(visible_until_, now) + std::chrono::milliseconds(4700);
+    AchievementToast::Push(event);
+    context_.CallInUIThreadDeferred([this] {
       if (!attached_) {
-        imgui_drawer()->AddDialog(this);
-        attached_ = true;
+        imgui_drawer()->AddDialog(this);attached_=true;
         tabletennis::pacing::SetUiActive(true);
       }
     });
   }
-
  protected:
   void OnDraw(ImGuiIO& io) override {
-    AchievementToastDialog::OnDraw(io);
-    if (attached_ && std::chrono::steady_clock::now() > visible_until_) {
-      imgui_drawer()->RemoveDialog(this);
-      attached_ = false;
+    AchievementToast::OnDraw(io);
+    if (attached_ && !HasPendingWork()) {
+      imgui_drawer()->RemoveDialog(this);attached_=false;
       tabletennis::pacing::SetUiActive(false);
     }
   }
-
  private:
-  rex::ui::WindowedAppContext& app_context_;
-  std::chrono::steady_clock::time_point visible_until_{};
-  bool attached_ = false;
+  rex::ui::WindowedAppContext& context_;
+  bool attached_=false;
 };
 
 class TabletennisApp : public rex::ReXApp {
@@ -151,6 +146,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ~TabletennisApp() override {
+    tabletennis::pc::SetAchievementsToggle({});
     tabletennis::pc::SetWindow(nullptr);
     tabletennis::intro::Uninstall();
     rex::ui::UnregisterBind("bind_toggle_fps");
@@ -166,6 +162,10 @@ class TabletennisApp : public rex::ReXApp {
       rex::ui::WindowedAppContext& ctx) {
     return std::unique_ptr<TabletennisApp>(new TabletennisApp(ctx, "tabletennis",
         PPCImageConfig));
+  }
+
+  void OnKeyDown(rex::ui::KeyEvent& event) override {
+    if (!tabletennis::achievement_ui::HandleKey(event)) rex::ui::ProcessKeyEvent(event);
   }
 
  protected:
@@ -283,7 +283,7 @@ class TabletennisApp : public rex::ReXApp {
       return nullptr;
     }
     return std::make_unique<OnDemandToastDialog>(app_context(), imgui_drawer(), immediate_drawer(),
-                                                 runtime());
+                                                 runtime(), &achievements(), window());
   }
 
   void OnPostLoadXexImage() override {
@@ -314,6 +314,12 @@ class TabletennisApp : public rex::ReXApp {
     }
   }
 
+  std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override {
+    if (!imgui_drawer() || !runtime()) return nullptr;
+    return std::make_unique<tabletennis::achievement_ui::AchievementsPanel>(
+        imgui_drawer(),immediate_drawer(),runtime(),&achievements());
+  }
+
   void OnConfigureFonts(ImFontAtlas* atlas) override {
     // Keep the regular overlay font first. The loading message gets its own
     // TrueType face baked at 3x size, with extra raster resolution for DPI.
@@ -335,6 +341,7 @@ class TabletennisApp : public rex::ReXApp {
         break;
       }
     }
+    tabletennis::achievement_ui::ConfigureFonts(atlas, rex::filesystem::GetExecutableFolder()/"fonts");
   }
 
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
@@ -375,6 +382,14 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
+    tabletennis::pc::SetAchievementsToggle([this] {
+      app_context().CallInUIThreadDeferred([this] {
+        if(!window()) return;
+        rex::ui::KeyEvent event(window(),rex::ui::VirtualKey::kF7,1,false,false,false,false,false);
+        rex::ui::ProcessKeyEvent(event);
+      });
+    });
+    tabletennis::prompts::Init(runtime()->memory(),runtime()->graphics_system());
     if (window()) {
       tabletennis::pc::SetWindow(window()->GetNativeWindowHandle());
       tabletennis::pc::SetSurfaceSize(window()->GetActualPhysicalWidth(),window()->GetActualPhysicalHeight());

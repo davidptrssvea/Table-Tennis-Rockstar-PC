@@ -1,5 +1,59 @@
 # Local build and source distribution
 
+## Community integration - 2026-11-03 (unreleased)
+
+Branch `feature/community-windows-port` adapts upstream MIT game-side code from
+ThisIsAkill/Table-Tennis-Linux commit 7bff91c561fa0e424562c6d851b9008e9fc9511e.
+SDK patches are combined against ReXGlue v0.10.0 commit
+f5337cdc947ff6d4c4196737e2c807a48f2a1fc2. Linux-only platform changes are excluded.
+
+The optional SDK was compiled and installed on Windows with Clang 23, Ninja and
+MSVC 14.44. The combined patch was also checked/applied against a pristine SDK
+worktree. The helper completed successfully using that existing source/build
+directory; its fresh-clone/full-build path has not been exercised as one command.
+It disables package-registry export so the test SDK does not change discovery
+for other projects. SDK headers and binaries must
+remain paired because the texture-load hook extends a virtual interface.
+
+Manual validation used isolated local profiles and a private virtual-pad test
+harness; that harness is excluded from public source and production builds:
+
+- Two Windows instances entered the same private relay room, displayed each
+  other's names, created/joined a lobby, loaded the court and reached gameplay.
+  Score progression was visible. This is a same-PC functional test, not an
+  Internet latency/NAT test or a complete match-completion test.
+- PlayStation A/B/X/Y and L1/R1 texture substitutions were visible in the lobby;
+  the initial saved-game screen retained a separate Xbox B variant. Forced PS
+  mode was tested; physical DualSense automatic detection was not available.
+- The styled 29-entry achievement list, keyboard End navigation, pad navigation,
+  View hold/B close, and an authored display-only test popup were checked.
+  Display-only toast tests do not award achievements or alter progress.
+- The achievement overlay detaches after its queue drains. Idle game and present
+  logs returned to 60 FPS; the native F10 statistics window remains separate.
+- The corrected optional ONLINE label is visible and QUIT TO DESKTOP stays last.
+
+Four opt-in C++/Python relay checks cover direct and forced-relay quality pings,
+private-room isolation, names and rejoining after server restart. Run them with
+`TABLETENNIS_TEST_COMMUNITY_SDK` pointing to the complete patched SDK. They do not
+establish spectator gameplay or interrupted-match recovery. Those upstream paths
+are ported but remain experimental. No public server was deployed or contacted.
+
+The stock-SDK setup remains offline and keeps its six-entry menu. Optional SDK
+setup generates the eight-entry menu locally from the user's verified ISO.
+Neither path distributes original game files or generated game functions.
+
+Final verification: all 16 automated tests passed with native pacing/layout,
+ISO boot and the patched-SDK transport tests enabled. Stock-SDK compilation and
+ISO boot also passed. A forced codegen repair recreated the native-edit inputs;
+all 23 rules applied, and a second application changed zero files.
+
+The launcher and pure production-input game build are staged separately under
+`scratch/community-feature-test/dist`; the installed root `dist` remains v1.1.2.
+The final interactive EXTRAS menu route and disabled-network selection check
+were interrupted by a Windows Firewall consent dialog. The cancellation guard
+is compiled but those two UI paths still need manual verification. No firewall
+or other security setting was changed by this work. No new release was published.
+
 ## v1.0.2 graphical installer
 
 The public `Install-Table-Tennis.exe` is compiled from `project/installer/Installer.cs`

@@ -9,7 +9,10 @@ ORIGINAL_MOVIE = '75c3a8250db52a44461b5fea383c148ce938229231257f5cd7f8a985848dfa
 PATCHED_MOVIE = 'cd6ad6d72bd9e4642cb529478ae7476e0e3215aba8a443250409e837a776953a'
 
 
-def patch(path):
+ONLINE_MOVIE = 'b8600c82885cf512ae81ca9e8db7538138ea71f34d5a6575542254cb910311a2'
+
+
+def patch(path, online=False):
     path = Path(path)
     archive = bytearray(path.read_bytes())
     if archive[:4] != b'RPF0':
@@ -39,7 +42,8 @@ def patch(path):
     if len(movie) != raw_size or not decoder.eof:
         raise ValueError('Invalid frontend compression')
     current = hashlib.sha256(movie).hexdigest()
-    if current == PATCHED_MOVIE:
+    expected = ONLINE_MOVIE if online else PATCHED_MOVIE
+    if current == expected:
         print('Menu patches already verified.', flush=True)
         return
     if hashlib.sha256(archive).hexdigest() != ORIGINAL_ARCHIVE or current != ORIGINAL_MOVIE:
@@ -65,7 +69,10 @@ def patch(path):
     # Zero only the fixed startup frame thresholds; retain initialization gates.
     for address in (0x3AABB7, 0x3AB044, 0x3AAC74):
         movie[address + 4:address + 8] = bytes(4)
-    if hashlib.sha256(movie).hexdigest() != PATCHED_MOVIE:
+    if online:
+        from menu_online import enable_online
+        enable_online(movie)
+    if hashlib.sha256(movie).hexdigest() != expected:
         raise ValueError('Patched frontend verification failed')
     compressor = zlib.compressobj(9, zlib.DEFLATED, -15)
     replacement = compressor.compress(movie) + compressor.flush()

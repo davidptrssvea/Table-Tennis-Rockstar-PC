@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -19,6 +20,10 @@ namespace TableTennisLauncher
 
     public class MainWindow : Window
     {
+        private ComboBox comboButtons;
+        private CheckBox chkNetwork;
+        private TextBox txtServer, txtPlayer, txtRoom;
+        private bool HasCommunityEngine { get { return File.Exists(Path.Combine(distDir, "community-engine.json")); } }
         private TextBox txtIsoPath;
         private TextBlock txtIsoStatus;
         private RadioButton rb720, rb1080, rb1440, rb4k, rbUltra;
@@ -253,6 +258,24 @@ namespace TableTennisLauncher
             graphGrid.Children.Add(comboPost);
             contentPanel.Children.Add(graphGrid);
 
+            contentPanel.Children.Add(CreateSectionTitle("CONTROLLER BUTTON ICONS"));
+            comboButtons = new ComboBox { Height = 28, Margin = new Thickness(0,4,0,8) };
+            comboButtons.Items.Add("Automatic (controller type)");
+            comboButtons.Items.Add("Xbox"); comboButtons.Items.Add("PlayStation");
+            comboButtons.SelectedIndex = 0;
+            contentPanel.Children.Add(comboButtons);
+            if (!HasCommunityEngine) contentPanel.Children.Add(new TextBlock {
+                Text = "Icon selection applies to achievements in this build.", Foreground = Brushes.LightGray, FontSize = 11 });
+            contentPanel.Children.Add(CreateSectionTitle("ONLINE PLAY (EXPERIMENTAL)"));
+            chkNetwork = new CheckBox { Content = "Enable ONLINE and SYSTEM LINK", Foreground = Brushes.White,
+                IsEnabled = HasCommunityEngine, Margin = new Thickness(0,4,0,8) };
+            contentPanel.Children.Add(chkNetwork);
+            if (!HasCommunityEngine) contentPanel.Children.Add(new TextBlock {
+                Text = "Online play is unavailable in this build.", Foreground = Brushes.LightGray, FontSize = 11 });
+            txtServer = NetworkField(contentPanel, "Matchmaking server (host or host:port)", 253);
+            txtPlayer = NetworkField(contentPanel, "Player name", 15);
+            txtRoom = NetworkField(contentPanel, "Private room code (6 characters; empty = public)", 6);
+
             // Section: Shortcuts Callout Card
             var callout = new Border
             {
@@ -274,7 +297,7 @@ namespace TableTennisLauncher
             };
             var calloutBody = new TextBlock
             {
-                Text = "- ESC : Exit game to Windows.\n- F10 : Show FPS, frame-time graph and presentation timing.",
+                Text = "- ESC : Exit game to Windows.\n- F10 : Show FPS, frame-time graph and presentation timing.\n- F7 / hold Back : Open achievements.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,
@@ -408,8 +431,16 @@ namespace TableTennisLauncher
             }
         }
 
+        private TextBox NetworkField(StackPanel parent, string label, int length) {
+            parent.Children.Add(new TextBlock { Text = label, Foreground = Brushes.LightGray, FontSize = 11 });
+            var box = new TextBox { Height = 26, MaxLength = length, Margin = new Thickness(0,3,0,7), IsEnabled = HasCommunityEngine };
+            parent.Children.Add(box); return box;
+        }
+
         private void LoadSettings()
         {
+            string buttons = "auto", server = "", player = "Player", room = "";
+            bool network = false;
             string iso = "";
             string res = "1080p";
             int framerate = 60;
@@ -428,7 +459,12 @@ namespace TableTennisLauncher
                         if (parts.Length != 2) continue;
                         string key = parts[0].Trim();
                         string val = parts[1].Trim();
-                        if (key.Equals("iso_path", StringComparison.OrdinalIgnoreCase)) iso = val;
+                        if (key == "button_prompts") buttons = val;
+                        else if (key == "online_server") server = val;
+                        else if (key == "player_name") player = val;
+                        else if (key == "room_code") room = val;
+                        else if (key == "system_link") bool.TryParse(val, out network);
+                        else if (key.Equals("iso_path", StringComparison.OrdinalIgnoreCase)) iso = val;
                         else if (key.Equals("resolution", StringComparison.OrdinalIgnoreCase)) res = val;
                         else if (key.Equals("framerate", StringComparison.OrdinalIgnoreCase)) int.TryParse(val, out framerate);
                         else if (key.Equals("fullscreen", StringComparison.OrdinalIgnoreCase)) bool.TryParse(val, out fullscreen);
@@ -481,6 +517,9 @@ namespace TableTennisLauncher
             else if (framerate == 0) comboFps.SelectedIndex = 4;
             else comboFps.SelectedIndex = 3; // 240 FPS
 
+            comboButtons.SelectedIndex = buttons == "xbox" ? 1 : buttons == "playstation" ? 2 : 0;
+            txtServer.Text = server; txtPlayer.Text = player; txtRoom.Text = room;
+            chkNetwork.IsChecked = HasCommunityEngine && network;
             chkFullscreen.IsChecked = fullscreen;
             chkShowFps.IsChecked = showFps;
 
@@ -531,7 +570,11 @@ namespace TableTennisLauncher
                     "fullscreen=" + fullscreen.ToString().ToLower(),
                     "show_fps=" + showFps.ToString().ToLower(),
                     "aa=" + aa,
-                    "post=" + post
+                    "post=" + post,
+                    "button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto"),
+                    "system_link=" + (HasCommunityEngine && chkNetwork.IsChecked == true).ToString().ToLower(),
+                    "online_server=" + txtServer.Text.Trim(), "player_name=" + txtPlayer.Text.Trim(),
+                    "room_code=" + txtRoom.Text.Trim().ToUpperInvariant()
                 });
             }
             catch { }
@@ -546,6 +589,13 @@ namespace TableTennisLauncher
                 return;
             }
 
+            if (chkNetwork.IsChecked == true &&
+                (!Regex.IsMatch(txtServer.Text.Trim(), @"^[A-Za-z0-9.-]+(:[0-9]{1,5})?$") ||
+                 !Regex.IsMatch(txtPlayer.Text.Trim(), @"^[A-Za-z0-9 _-]{1,15}$") ||
+                 (txtRoom.Text.Trim().Length != 0 && !Regex.IsMatch(txtRoom.Text.Trim().ToUpperInvariant(), @"^[A-HJ-NP-Z2-9]{6}$")))) {
+                MessageBox.Show("Enter a server host (optionally :port), a player name (1-15 letters/numbers/spaces), and either no room code or a valid 6-character code.", "Online settings", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             SaveSettings();
 
             int width = 1920;
@@ -612,6 +662,13 @@ namespace TableTennisLauncher
                 "--game_data_root=\"{0}\" --resolution_scale={1} --draw_resolution_scale_x={1} --draw_resolution_scale_y={1} --window_width={2} --window_height={3} --fullscreen={4} --swap_post_effect={5} --present_effect={6} --show_fps={7} --framerate={8} --protect_zero=false --gpu_allow_invalid_fetch_constants=true",
                 selectedIso, resScale, width, height, isFullscreen.ToString().ToLower(), aa, post, showFps.ToString().ToLower(), targetFps);
 
+            args += " --button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto");
+            if (HasCommunityEngine) {
+                args += " --online=off --system_link=" + (chkNetwork.IsChecked == true).ToString().ToLower();
+                // Only pass validated strings when networking is enabled.
+                if (chkNetwork.IsChecked == true) args += " --online_server=" + txtServer.Text.Trim() +
+                    " --user_name=\"" + txtPlayer.Text.Trim() + "\" --room_code=\"" + txtRoom.Text.Trim().ToUpperInvariant() + "\"";
+            }
             var psi = new ProcessStartInfo
             {
                 FileName = exePath,

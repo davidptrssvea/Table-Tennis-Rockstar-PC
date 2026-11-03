@@ -2,19 +2,24 @@
   {
     "name": "sub_821CA3F0",
     "input_sha256": "b2b41ea935e80479ea3819a2eff7ae0ac7d1e94fd5931d53dd687929011cb97e",
-    "output_sha256": "0714226d0cbdac25a3d2213651329fc85c7f05de4d2ef4014219070191fbc758",
+    "output_sha256": "71dc9c58cc0dc536a52054304e7d2f45b3a1544aa4b761681b057cfdf8babe69",
     "edits": [
       {
         "offset": 550,
-        "delete": 41,
-        "insert": "\t// mr r30,r4 -- OFFLINE PC PORT: force online flag = 0\n\tctx.r30.u64 = 0;\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// mr r30,r4 -- OFFLINE PC PORT: force online flag = 0\n\t\tctx.r30.u64 = 0;\n\t\tgoto tt_offline_1;\n\t}\n"
+      },
+      {
+        "offset": 591,
+        "delete": 0,
+        "insert": "tt_offline_1:;\n"
       }
     ]
   },
   {
     "name": "sub_822FBD50",
     "input_sha256": "c381c8df563a62fde697289ab053835cad8f21ce612a74e2900ac4a67f0daa5b",
-    "output_sha256": "2805455949d3c23186cb79d149006302b1b3e44ec33bfa7294b8e6fe17ed21e7",
+    "output_sha256": "c3f166412818ddfa981041fa71756a20469092f35e05867b0c866fa3a4b6ae2f",
     "edits": [
       {
         "offset": 54,
@@ -23,100 +28,135 @@
       },
       {
         "offset": 1648,
-        "delete": 45,
-        "insert": "\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n\t\tgoto tt_offline_1;\n\t}\n"
+      },
+      {
+        "offset": 1693,
+        "delete": 0,
+        "insert": "tt_offline_1:;\n"
       },
       {
         "offset": 14322,
-        "delete": 63,
-        "insert": "\t// stw r26,0(r3) -- OFFLINE PC PORT: force GLOBAL_ONLINE_ENABLED = 0\n\tREX_STORE_U32(ctx.r3.u32 + 0, 0);\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// stw r26,0(r3) -- OFFLINE PC PORT: force GLOBAL_ONLINE_ENABLED = 0\n\t\tREX_STORE_U32(ctx.r3.u32 + 0, 0);\n\t\tgoto tt_offline_2;\n\t}\n"
+      },
+      {
+        "offset": 14385,
+        "delete": 0,
+        "insert": "tt_offline_2:;\n"
       },
       {
         "offset": 15070,
-        "delete": 66,
-        "insert": "\t// OFFLINE: suppressed sub_822FD580(ctx, base)\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// OFFLINE: suppressed sub_822FD580(ctx, base)\n\t\tgoto tt_offline_3;\n\t}\n"
+      },
+      {
+        "offset": 15136,
+        "delete": 0,
+        "insert": "tt_offline_3:;\n"
       }
     ]
   },
   {
     "name": "sub_822FC150",
     "input_sha256": "ff5af166bc3d1cf1561beacf6d401b82e53d0a971e62eaaceefa409da6edde98",
-    "output_sha256": "1b15ab8c0a3955fc4998fbe32a764c88730935f788244146c552fa47f1beae8a",
+    "output_sha256": "cc64bc65935a1fa05475f5eba074c68db93712cd5c6ffd607a9c86dfde92d8eb",
     "edits": [
       {
         "offset": 19244,
-        "delete": 408,
-        "insert": "\t// OFFLINE: State 58 (online create) suppressed - stay in State 55 (Main Menu)\n\tREX_STORE_U32(ctx.r30.u32 + 5564, 55);\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// OFFLINE: State 58 (online create) suppressed - stay in State 55 (Main Menu)\n\t\tREX_STORE_U32(ctx.r30.u32 + 5564, 55);\n\t\tgoto tt_offline_1;\n\t}\n"
+      },
+      {
+        "offset": 19652,
+        "delete": 0,
+        "insert": "tt_offline_1:;\n"
       }
     ]
   },
   {
     "name": "sub_822FC970",
     "input_sha256": "2ee8f272b60813b923769089bca0705bf65305b4a4e081eec9f32cee0080a7b9",
-    "output_sha256": "4789f87d45de0667e6fb7d222aaf5f00891d8144a066a13dcbf36d799a739c1c",
+    "output_sha256": "9bd1f2e34be3ac0a10483d6d98b8737a5c5d8940d82e0478caf5f1c41fc994d7",
     "edits": [
       {
         "offset": 2980,
         "delete": 0,
-        "insert": "\t// OFFLINE PC PORT: Force Flash GLOBAL_ONLINE_ENABLED = false (0)\n\t{\n\t\tPPCContext sub_ctx = ctx;\n\t\tsub_ctx.r3.u64 = REX_LOAD_U32(ctx.r28.u32 + 5556);\n\t\tsub_ctx.r4.s64 = -2113536000 + -12244; // 0x8205D02C: GLOBAL_ONLINE_ENABLED\n\t\tsub_823F9318(sub_ctx, base);\n\t\tif (sub_ctx.r3.u32 != 0) {\n\t\t\tREX_STORE_U32(sub_ctx.r3.u32 + 0, 0);\n\t\t\tREX_STORE_U32(sub_ctx.r3.u32 + 4, 3);\n\t\t}\n\t}\n"
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// OFFLINE PC PORT: Force Flash GLOBAL_ONLINE_ENABLED = false (0)\n\t\t{\n\t\t\tPPCContext sub_ctx = ctx;\n\t\t\tsub_ctx.r3.u64 = REX_LOAD_U32(ctx.r28.u32 + 5556);\n\t\t\tsub_ctx.r4.s64 = -2113536000 + -12244; // 0x8205D02C: GLOBAL_ONLINE_ENABLED\n\t\t\tsub_823F9318(sub_ctx, base);\n\t\t\tif (sub_ctx.r3.u32 != 0) {\n\t\t\t\tREX_STORE_U32(sub_ctx.r3.u32 + 0, 0);\n\t\t\t\tREX_STORE_U32(sub_ctx.r3.u32 + 4, 3);\n\t\t\t}\n\t\t}\n\t}\n"
       }
     ]
   },
   {
     "name": "sub_822FD580",
     "input_sha256": "644524f05b6a8948fbc414006c3f055d6e23dc118bf98e1f08a19eec9fcd3293",
-    "output_sha256": "0b185c0434fa819b0211df2da7407154623bb3f8da3cf7adc74d5e3c544affea",
+    "output_sha256": "3bdf0c00f378e6e94dbcca2956fb25b5c88fb58e5c4da988040addc58b81a04f",
     "edits": [
       {
         "offset": 54,
         "delete": 0,
-        "insert": "\treturn;\n"
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\treturn;\n\t}\n"
       },
       {
         "offset": 3689,
-        "delete": 45,
-        "insert": "\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n\t\tgoto tt_offline_1;\n\t}\n"
+      },
+      {
+        "offset": 3734,
+        "delete": 0,
+        "insert": "tt_offline_1:;\n"
       },
       {
         "offset": 11123,
-        "delete": 45,
-        "insert": "\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\tREX_STORE_U32(ctx.r3.u32 + 0, 0); // OFFLINE: force onlineAuthorized = 0\n\t\tgoto tt_offline_2;\n\t}\n"
+      },
+      {
+        "offset": 11168,
+        "delete": 0,
+        "insert": "tt_offline_2:;\n"
       }
     ]
   },
   {
     "name": "sub_822FE0C8",
     "input_sha256": "bf15a503900b5f81c5cc3650f351d71a133a835d543c71cd2c5d78f00736a573",
-    "output_sha256": "62ff8d13182d799bf64992b3cd974673f751d3fdb95560e22bf520a1636bef98",
+    "output_sha256": "a54450a25ae1d1810392dba51e31074e1e71bfe7c214c397a7bb65b0a86fd2ca",
     "edits": [
       {
         "offset": 54,
         "delete": 0,
-        "insert": "\treturn;\n"
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\treturn;\n\t}\n"
       }
     ]
   },
   {
     "name": "sub_822FE1E0",
     "input_sha256": "d00c9db68f22d1b19f10e2dd48e6169403961ffa07196f47ab7f7b8cbd2e9a62",
-    "output_sha256": "4b44596b6952a48e693a12e95776d0c96919e987ed20c0f251597cb77c6b3f05",
+    "output_sha256": "b5d983d44ac2fd2f0f4e365d539578bd85c8b48aa3f94e8cb8fc4a642af18607",
     "edits": [
       {
         "offset": 54,
         "delete": 0,
-        "insert": "\tREXLOG_INFO(\"Tabletennis: Blocked Xbox Live activation in sub_822FE1E0.\");\n\treturn;\n"
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\tREXLOG_INFO(\"Tabletennis: Blocked Xbox Live activation in sub_822FE1E0.\");\n\t\treturn;\n\t}\n"
       }
     ]
   },
   {
     "name": "sub_82301618",
     "input_sha256": "a3614799b17d0badc6171d5f3c193d1c416c5e94082262eade565796c2c1a538",
-    "output_sha256": "b1ddeef7f7dd5c445b4d8a9d966d04965fec956d9827f549357d099f850dbb38",
+    "output_sha256": "d7c87c971af229d818a20a4e495739420c24ee4b970a9d7039d19f0825f36536",
     "edits": [
       {
         "offset": 9801,
-        "delete": 370,
-        "insert": "\t// OFFLINE PC PORT: Suppress Xbox Live screen 3 transition, stay on main menu\n\tgoto loc_823018C0;\n"
+        "delete": 0,
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\t// OFFLINE PC PORT: Suppress Xbox Live screen 3 transition, stay on main menu\n\t\tgoto loc_823018C0;\n\t\tgoto tt_offline_1;\n\t}\n"
+      },
+      {
+        "offset": 10171,
+        "delete": 0,
+        "insert": "tt_offline_1:;\n"
       }
     ]
   },
@@ -169,12 +209,12 @@
   {
     "name": "sub_8230FAD8",
     "input_sha256": "85adcaedc0fb1d4ee61b3b64301632c45f049113044485921c9c244b0176a34c",
-    "output_sha256": "2cad42efac4e6594674ef96fb6ab1d536d4d592510e8eda9d6126295b54c6daa",
+    "output_sha256": "81bfaa1b36ed266d2a74da0bd0f7ddb5b13d2062e6acbe2b8488cb1997a6fcdb",
     "edits": [
       {
         "offset": 54,
         "delete": 0,
-        "insert": "\treturn;\n"
+        "insert": "\tif (!tabletennis::lan::Enabled()) {\n\t\treturn;\n\t}\n"
       }
     ]
   },
@@ -241,12 +281,12 @@
   {
     "name": "tabletennis_pch.h",
     "input_sha256": "56eb9b49a565ca5acc8a6e6da556c0f1d55accc26f36dcf8698c1cc65e359af1",
-    "output_sha256": "53936e6d72a3cbbe87f3b8ead29d727fddaa80dae33ec77882c3670eb3547107",
+    "output_sha256": "39586d29c4d170dbbb6a8998d6a9297c2b7a7fd50950478b3ebf6c7994cae9bc",
     "edits": [
       {
         "offset": 13801,
         "delete": 0,
-        "insert": "extern \"C\" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__VdSwap Tabletennis_VdSwap_Hook\n\nextern \"C\" void Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetSigninState Tabletennis_XamUserGetSigninState_Hook\n\nextern \"C\" void Tabletennis_XamUserCheckPrivilege_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserCheckPrivilege Tabletennis_XamUserCheckPrivilege_Hook\n\nextern \"C\" void Tabletennis_XamShowSigninUI_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamShowSigninUI Tabletennis_XamShowSigninUI_Hook\n\n"
+        "insert": "extern \"C\" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__VdSwap Tabletennis_VdSwap_Hook\n\nextern \"C\" void Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetSigninState Tabletennis_XamUserGetSigninState_Hook\n\nextern \"C\" void Tabletennis_XamUserCheckPrivilege_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserCheckPrivilege Tabletennis_XamUserCheckPrivilege_Hook\n\nextern \"C\" void Tabletennis_XamShowSigninUI_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamShowSigninUI Tabletennis_XamShowSigninUI_Hook\n\nextern \"C\" void Tabletennis_XamUserGetXUID_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetXUID Tabletennis_XamUserGetXUID_Hook\n\n"
       },
       {
         "offset": 14173,

@@ -17,6 +17,8 @@ set(TABLETENNIS_SOURCES
     src/frame_pacer.cpp
     src/stats_window.cpp
     src/pc_features.cpp
+    src/achievement_ui.cpp
+    src/button_prompts.cpp
 )
 
 if(WIN32)
@@ -47,4 +49,13 @@ target_sources(tabletennis PRIVATE sdk-overrides/rex_app.cpp)
 target_include_directories(tabletennis BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sdk-overrides")
 if(TARGET tabletennis_recomp)
     target_include_directories(tabletennis_recomp BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/sdk-overrides")
+endif()
+
+# Never add virtual interface methods to headers while using the stock DLLs.
+# Extended features are enabled only for the separately built, matched SDK.
+set(TT_SDK_ROOT "${REXGLUE_SHARE_DIR}/../..")
+if(EXISTS "${TT_SDK_ROOT}/.tabletennis-community-sdk")
+    target_compile_definitions(tabletennis PRIVATE TT_TEXTURE_LOAD_HOOK=1 TT_COMMUNITY_NETWORK=1)
+    target_compile_definitions(tabletennis_recomp PRIVATE TT_COMMUNITY_NETWORK=1)
+    target_sources(tabletennis PRIVATE src/system_link.cpp)
 endif()

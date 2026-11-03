@@ -1,5 +1,8 @@
 #include "generated/default/tabletennis_init.h"
 #include "intro_skip.h"
+#include "achievement_ui.h"
+#include "button_prompts.h"
+#include "system_link.h"
 
 #include <SDL3/SDL.h>
 #include <array>
@@ -118,6 +121,10 @@ bool SkipMovies() {
   return phase.load() == Phase::Skipping && !frontend_started.load();
 }
 
+bool MainMenuReached() {
+  return phase.load()==Phase::Done || phase.load()==Phase::Drain;
+}
+
 bool ShowTransition() { return phase.load() == Phase::Skipping; }
 
 bool UiWorkFinished() {
@@ -198,6 +205,19 @@ bool AdvanceFrontendMovie(PPCContext& ctx, uint8_t* base) {
 
 void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) {
   if (user >= 4 || !state || ctx.r3.u32 != 0) return;
+  if (MainMenuReached()) {
+    if (user==0) tabletennis::prompts::Update();
+    achievement_ui::PadSample pad{
+      REX_LOAD_U16(state+4),REX_LOAD_U8(state+6),REX_LOAD_U8(state+7),
+      int16_t(REX_LOAD_U16(state+8)),int16_t(REX_LOAD_U16(state+10)),
+      int16_t(REX_LOAD_U16(state+12)),int16_t(REX_LOAD_U16(state+14))};
+    if (achievement_ui::FilterInput(user,pad)) {
+      REX_STORE_U16(state+4,pad.buttons);REX_STORE_U8(state+6,pad.left_trigger);
+      REX_STORE_U8(state+7,pad.right_trigger);REX_STORE_U16(state+8,uint16_t(pad.thumb_lx));
+      REX_STORE_U16(state+10,uint16_t(pad.thumb_ly));REX_STORE_U16(state+12,uint16_t(pad.thumb_rx));
+      REX_STORE_U16(state+14,uint16_t(pad.thumb_ry));
+    }
+  }
   const uint16_t buttons = REX_LOAD_U16(state + 4);
   const bool pressed = buttons || REX_LOAD_U8(state + 6) > 30 ||
                        REX_LOAD_U8(state + 7) > 30;
@@ -229,6 +249,9 @@ void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) 
 }
 
 void ObserveFrontend(PPCContext& ctx, uint8_t* base) {
+#if defined(TT_COMMUNITY_NETWORK)
+  tabletennis::lan::PollFrontend(ctx,base,REX_LOAD_U32(ctx.r4.u32+92));
+#endif
   frontend_started.store(true);
   if (phase.load() == Phase::Done || phase.load() == Phase::Drain) return;
   const auto movie = REX_LOAD_U32(ctx.r4.u32 + 92);

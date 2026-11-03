@@ -3,6 +3,7 @@
 #include "generated/default/tabletennis_init.h"
 #include <rex/cvar.h>
 #include "tabletennis_app.h"
+#include "system_link.h"
 
 REXCVAR_DEFINE_BOOL(show_fps, false, "UI", "Show in-game FPS counter");
 REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 144, 240, 0=unlimited)");
@@ -26,7 +27,7 @@ extern "C" void __imp__Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base) {
 extern "C" void Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, uint8_t* base) {
   uint32_t user_index = ctx.r3.u32;
   if (user_index == 0) {
-    ctx.r3.u64 = 1; // eXUserSigninState_SignedInLocally
+    ctx.r3.u64 = tabletennis::lan::Enabled() ? 2 : 1; // emulated sign-in; no Xbox Live
   } else {
     ctx.r3.u64 = 0; // eXUserSigninState_NotSignedIn
   }
@@ -41,7 +42,7 @@ extern "C" void __imp__Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, u
 extern "C" void Tabletennis_XamUserCheckPrivilege_Hook(PPCContext& ctx, uint8_t* base) {
   uint32_t result_ptr = ctx.r5.u32;
   if (result_ptr != 0) {
-    REX_STORE_U32(result_ptr, 0); // 0 = Denied / Disabled
+    REX_STORE_U32(result_ptr, tabletennis::lan::Enabled() && (ctx.r3.u32==0 || ctx.r3.u32==0xFF) ? 1 : 0);
   }
   ctx.r3.u64 = 0;
 }
@@ -70,3 +71,11 @@ struct EarlyInit {
 }  // namespace
 
 REX_DEFINE_APP(tabletennis, TabletennisApp::Create)
+
+#if !defined(TT_COMMUNITY_NETWORK)
+#undef __imp__XamUserGetXUID
+extern "C" REX_FUNC(__imp__XamUserGetXUID);
+extern "C" void Tabletennis_XamUserGetXUID_Hook(PPCContext& ctx,uint8_t* base) {
+  __imp__XamUserGetXUID(ctx,base);
+}
+#endif

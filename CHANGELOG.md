@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased - community Windows integration
+
+- Adapt ThisIsAkill's achievement popup/list and EXTRAS > ACHIEVEMENTS entry;
+  retain on-demand overlays and the Windows 60 FPS frame scheduler.
+- Add Auto/Xbox/PlayStation prompts. Full game texture replacement needs the
+  optional matched community SDK.
+- Port optional networking to Winsock, preserving native socket handles,
+  nonblocking I/O and Windows QoS timeouts. Add ONLINE / SYSTEM LINK, player
+  names, room/server settings and a local relay server.
+- Verify two local Windows clients can create/join a lobby and start a match.
+  Add direct/relay, private-room and server-rejoin automated checks. Internet
+  play, spectating and interrupted-match recovery remain experimental.
+- Include a pinned source builder for the separate SDK. Stock installer builds
+  remain offline; no public matchmaking service is deployed.
+
+
+
+
 ## v1.1.2 - 2026-11-02 - late-frame recovery
 
 - Submit overdue frames immediately and rebase the next deadline. This avoids adding a full frame of waiting after long stalls or producing short catch-up intervals afterward.
@@ -9,7 +27,7 @@
 
 - Capitalized the final main-menu item as QUIT TO DESKTOP; it remains below EXTRAS.
 
-## v1.1.0 — 2026-11-02
+## v1.1.0 â€” 2026-11-02
 
 - Added 2560x1080, 3440x1440 and 3840x1600 ultrawide presets to the launcher.
 - Adapt the 3D camera to the actual window aspect ratio. Menus and score HUD retain normal proportions in a centered 16:9 safe area, with GPU scissor clipping to hide off-stage artwork.
@@ -18,7 +36,7 @@
 - Keep 60 FPS pacing, intro skip, offline profile/menu fixes, ISO support and the credited desktop shortcut from earlier releases.
 - Added compiled checks for square UI proportions, centered safe areas and scissor bounds. The launcher scrolls when needed on smaller desktops.
 
-## v1.0.7 — 2026-11-02
+## v1.0.7 â€” 2026-11-02
 
 - Integrated malinkicat's PR #6 frame-pacing work, preserving the later command-line framerate precedence fix.
 - GPU-plugin VSync now receives its setting after late registration via REX_VSYNC; all requested frame-rate options are currently paced at 60 to preserve game speed.

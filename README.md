@@ -26,6 +26,51 @@ The ISO is checked before installing large compiler components and is always ope
 
 ## PC enhancements
 
+### Community features (development branch)
+
+The Windows port adapts the achievement UI, PlayStation artwork and networking
+from [ThisIsAkill/Table-Tennis-Linux](https://github.com/ThisIsAkill/Table-Tennis-Linux),
+commit `7bff91c561fa0e424562c6d851b9008e9fc9511e`. Thanks to **ThisIsAkill**!
+The [MIT notice](licenses/Table-Tennis-Linux/NOTICE.txt) is retained; SDK changes
+retain ReXGlue's BSD license. These features are not in the v1.1.2 download above.
+
+- **Achievements:** styled unlock notifications and a list of all 29 achievements,
+  opened from **EXTRAS > ACHIEVEMENTS**, **F7**, or by holding **View/Back** for
+  0.8 seconds. Scroll with the D-pad/stick, mouse wheel or arrow keys; shoulders
+  and Page Up/Down change pages. B or F7 closes the list. Progress remains local.
+- **Button prompts:** Auto, Xbox and PlayStation choices in the launcher. Auto
+  detects SDL PlayStation controllers. Replacing the game's texture icons needs
+  the matched community SDK below; stock SDK builds apply this choice to the
+  achievement overlay only. Some separate/vector icons retain their Xbox art.
+- **Experimental ONLINE / SYSTEM LINK:** optional matched-SDK builds expose these
+  menu entries and launcher fields for server address, player name and private
+  room code. Networking is disabled by default; no public server is supplied or
+  automatically contacted. **QUIT TO DESKTOP** remains the final menu item.
+
+Two Windows clients have joined a private room, created/joined a lobby and started
+a match on one PC. Automated checks cover direct/relayed peer traffic, room
+isolation and rejoining after a server restart. Internet/NAT combinations,
+spectating and recovery of a running match after a connection drop are not yet
+validated. Their upstream engine paths are ported, but remain experimental.
+Xbox LIVE accounts, ranked services and leaderboards are unavailable.
+
+The existing intro skip, ultrawide proportions, Windows 60 FPS frame scheduler and
+native F10 window are retained. Achievement overlays detach when idle. Linux-only
+write-watch and FidelityFX build changes are excluded.
+
+Developers with the prerequisites installed can build the separate SDK, then the
+local game from an unpatched source checkout:
+
+```powershell
+py -3 project/tools/build_community_sdk.py --jobs 4
+py -3 project/tools/setup_build.py --iso 'E:\Your disc.iso' --sdk '.tools/community-sdk'
+```
+
+This compiles pinned ReXGlue v0.10.0 source plus the included Windows patch into a
+separate SDK folder. Keep its headers, libraries and DLLs together; the texture
+hook changes an engine interface. The ordinary installer uses the stock SDK.
+See [relay setup](server/README.md) and [validation details](reports/LOCAL_BUILD.md).
+
 ### Sharper 3D rendering — up to 4K
 
 Choose your display preset directly in the game launcher:
