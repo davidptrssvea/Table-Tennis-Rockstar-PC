@@ -49,10 +49,13 @@ all 23 rules applied, and a second application changed zero files.
 
 The launcher and pure production-input game build are staged separately under
 `scratch/community-feature-test/dist`; the installed root `dist` remains v1.1.2.
-The final interactive EXTRAS menu route and disabled-network selection check
-were interrupted by a Windows Firewall consent dialog. The cancellation guard
-is compiled but those two UI paths still need manual verification. No firewall
-or other security setting was changed by this work. No new release was published.
+After the user handled the Windows Firewall permission dialog, the remaining
+interactive checks passed: EXTRAS > ACHIEVEMENTS opened the styled list, both
+ONLINE and SYSTEM LINK stayed in the main menu with networking disabled, and
+OPTIONS remained usable afterward. QUIT TO DESKTOP was selectable as the final
+row and closed the process through the normal window-close path. Firewall
+permission was handled manually by the user; the agent did not alter security
+settings. No new release was published.
 
 ## v1.0.2 graphical installer
 
