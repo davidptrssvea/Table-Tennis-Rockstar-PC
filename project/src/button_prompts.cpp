@@ -362,7 +362,22 @@ void DrawButton(ImDrawList* dl,const ImVec2& center,float radius,unsigned int fi
   const float scale=px/baked->Size;
   const ImVec2 at{center.x-(glyph->X0+glyph->X1)*scale*.5f,
                   center.y-(glyph->Y0+glyph->Y1)*scale*.5f};
+  const int first_letter_vertex=dl->VtxBuffer.Size;
   dl->AddText(font,px,at,IM_COL32(12,19,12,opacity(255)),letter);
+  // RenderText truncates its origin to whole pixels, biasing the result left/up.
+  // Center the emitted glyph itself so fractional DPI and icon sizes stay exact.
+  if(dl->VtxBuffer.Size>first_letter_vertex) {
+    ImVec2 lo=dl->VtxBuffer[first_letter_vertex].pos,hi=lo;
+    for(int i=first_letter_vertex+1;i<dl->VtxBuffer.Size;i++) {
+      const auto& p=dl->VtxBuffer[i].pos;
+      lo.x=std::min(lo.x,p.x);lo.y=std::min(lo.y,p.y);
+      hi.x=std::max(hi.x,p.x);hi.y=std::max(hi.y,p.y);
+    }
+    const ImVec2 offset{center.x-(lo.x+hi.x)*.5f,center.y-(lo.y+hi.y)*.5f};
+    for(int i=first_letter_vertex;i<dl->VtxBuffer.Size;i++) {
+      dl->VtxBuffer[i].pos.x+=offset.x;dl->VtxBuffer[i].pos.y+=offset.y;
+    }
+  }
 }
 
 const char* Shoulder(bool right) {

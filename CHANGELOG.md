@@ -7,7 +7,7 @@
 
 - Redesign Photo mode help as a dark rounded panel with aligned controller and
   keyboard columns, a zoom badge, spaced button actions and wrapped status text.
-  Correct Xbox glyph scaling and center normal bold lettering; smooth
+  Correct Xbox glyph scaling and center the rendered bold letters after pixel rounding; smooth
   PlayStation caps at high DPI. Shared overlay buttons receive the same fix.
 
 - Add Photo mode optical zoom (0.5x–5x): D-pad up/down, mouse wheel or Page

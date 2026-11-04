@@ -1,5 +1,16 @@
 # Local build and source distribution
 
+## Xbox pixel-centering correction - 2026-11-04 (unreleased)
+
+ImGui truncates the text origin to whole pixels after the caller computes the
+glyph offset. This introduced a fractional left/up bias at the compact icon
+size. Center the emitted glyph vertices on the button center after rendering
+text, eliminating that rounding bias on both axes. Font, text sizes, button
+sizes and layout are retained. Built and visually checked A/B/X/Y in the
+isolated 1920x1080 preview, then restored Init and built clean production.
+Deployed experimental build `26194D239735`; no private preview/input hooks.
+Private ISO ZIP, stable root dist and GitHub remain unchanged.
+
 ## Compact Photo help - 2026-11-04 (unreleased)
 
 Reduced the panel from 760x318 to 650x264 logical layout units (29% less area).
