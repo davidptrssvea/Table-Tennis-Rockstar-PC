@@ -1,5 +1,24 @@
 # Local build and source distribution
 
+## v1.5.0 release validation - 2026-11-04
+
+Promote the community Windows integration to v1.5.0. All 72 regression checks
+passed with native compiler, matched SDK and isolated retail-ISO startup enabled.
+The final invitation compatibility regression also passes: independently compiled
+EXEs with identical release versions/engines match; changed release/engine bytes
+and missing games do not. Unversioned builds keep exact binary comparison.
+
+Updated the real root dist used by the desktop shortcut to the latest clean
+production game, launcher, menu archive, matched engine and updater/Python/relay
+support. Preserved settings byte-for-byte and backed up the entire previous dist
+in scratch/pre-v1.5.0-real-install. Game/engine binary fingerprint is
+1AA509A54594 (the invitation compatibility ID now uses version/engine identity).
+Retained original saves and ISO. Public packaging uses the 94-file source
+allowlist and matched game-free SDK; no generated game/retail material is added.
+Previous updater end-to-end rebuild and rollback validation is documented below.
+Internet/NAT combinations, spectating and running-match recovery remain experimental.
+
+
 ## PC SETTINGS selection band - 2026-11-04 (unreleased)
 
 Replace the 40-unit opaque highlight with the rendered capital-letter height

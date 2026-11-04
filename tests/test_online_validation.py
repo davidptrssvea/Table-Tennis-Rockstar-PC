@@ -142,6 +142,29 @@ class Probe {
    if(selected!=actual) throw new Exception("Hostname/UDP readiness mismatch");
    return;
   }
+  var compatMethod=t.GetMethod("OnlineBuildIdForFolder",BindingFlags.NonPublic|BindingFlags.Static);
+  string compatFolder=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"compatMethod-a");
+  string compatOther=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"compatMethod-b");
+  System.IO.Directory.CreateDirectory(compatFolder);System.IO.Directory.CreateDirectory(compatOther);
+  foreach(string dir in new[]{compatFolder,compatOther}) {
+   System.IO.File.WriteAllText(System.IO.Path.Combine(dir,"install-version.txt"),"1.5.0");
+   System.IO.File.WriteAllText(System.IO.Path.Combine(dir,"rexruntime.dll"),"same runtime");
+   System.IO.File.WriteAllText(System.IO.Path.Combine(dir,"rexgpu-xenos.dll"),"same GPU");
+   System.IO.File.WriteAllText(System.IO.Path.Combine(dir,"tabletennis.exe"),dir);
+  }
+  Func<string,string> compatId=dir=>(string)compatMethod.Invoke(null,new object[]{dir});
+  string compatExpected=compatId(compatFolder);
+  if(compatExpected=="unavailable" || compatId(compatOther)!=compatExpected) throw new Exception("Independent local builds of one release must match");
+  System.IO.File.WriteAllText(System.IO.Path.Combine(compatOther,"install-version.txt"),"1.5.1");
+  if(compatId(compatOther)==compatExpected) throw new Exception("Different releases must not match");
+  System.IO.File.WriteAllText(System.IO.Path.Combine(compatOther,"install-version.txt"),"1.5.0");
+  System.IO.File.WriteAllText(System.IO.Path.Combine(compatOther,"rexgpu-xenos.dll"),"different GPU");
+  if(compatId(compatOther)==compatExpected) throw new Exception("Mixed engines must not match");
+  System.IO.File.WriteAllText(System.IO.Path.Combine(compatOther,"rexgpu-xenos.dll"),"same GPU");
+  foreach(string dir in new[]{compatFolder,compatOther}) System.IO.File.Delete(System.IO.Path.Combine(dir,"install-version.txt"));
+  if(compatId(compatFolder)==compatId(compatOther)) throw new Exception("Unversioned builds must retain exact binary comparison");
+  System.IO.File.Delete(System.IO.Path.Combine(compatOther,"tabletennis.exe"));
+  if(compatId(compatOther)!="unavailable") throw new Exception("Missing game must not be joinable");
   var create=t.GetMethod("MakeInvitation",BindingFlags.NonPublic|BindingFlags.Static);
   var read=t.GetMethod("ReadInvitation",BindingFlags.NonPublic|BindingFlags.Static);
   var random=t.GetMethod("NewPrivateRoom",BindingFlags.NonPublic|BindingFlags.Static);

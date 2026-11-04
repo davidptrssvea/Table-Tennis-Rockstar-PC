@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased - community Windows integration
+## v1.5.0 - 2026-11-04 - the community update
+
+- Compare release version and exact engine bytes for friend invitations, allowing
+  independently compiled copies of the same release. Keep exact binary checks
+  for unversioned builds and reject missing games, different releases or engines.
 
 - Slim the PC SETTINGS selection band, center it on visible capital-letter
   bounds, inset its sides and use 61% opacity. Preserve text and row spacing.
@@ -13,7 +17,7 @@
   glyph bounds; retain all text sizes and compact panel dimensions.
 
 - Give the PC SETTINGS dark body subtle transparency and lighten its background
-  dimming, retaining opaque text, selection highlight, title and footer.
+  dimming, retaining opaque text, title and footer.
 
 - Automatically hide the game-window mouse cursor after two seconds without
   motion; reveal it immediately when the mouse moves, using the SDK cursor API.
@@ -57,16 +61,16 @@
 - Add copy/paste friend invitations with private room generation and matching
   game/engine build checks. Keep each player's own name. Probe the server's UDP
   protocol, including DNS names, before online launch and with Test connection.
-  Explain when a LAN address cannot reach another home network. Public hosting
-  remains a separate deployment step; router/firewall settings are unchanged.
+  Explain when a LAN address cannot reach another home network. Windows firewall
+  settings are unchanged; optional router leases require explicit opt-in.
 
 - Add opt-out background release checks, launcher update controls, a main-menu
   notification and a PC SETTINGS > UPDATES action. Installation requires approval.
 - Verify signed release metadata and source/engine checksums, rebuild locally from
   the existing ISO, and install with backups and crash recovery. Preserve settings,
   saves and unrelated files. Bundle the updater, Python and relay tools.
-- Pin the matched community engine for the upcoming v1.2.0 installer and updates;
-  existing releases remain unchanged. No Windows security settings are changed.
+- Pin the matched community engine for the v1.5.0 installer and updates;
+  older release assets remain unchanged. No Windows security settings are changed.
 
 - Polish Xbox buttons in PC SETTINGS and achievements: shaded caps, dark rims,
   subtle highlights/shadows and letters centered by their visible glyph bounds.
@@ -110,8 +114,7 @@
 
 - Explain local-network setup directly in the launcher. Show this PC's server
   address, provide a copy button and start the bundled relay with one click.
-  Include this in the official community release after multiplayer testing;
-  the existing private test ZIP is unchanged.
+  Bundle relay/Python tools in the release. The private test ZIP is unchanged.
 
 - Adapt ThisIsAkill's achievement popup/list and EXTRAS > ACHIEVEMENTS entry;
   retain on-demand overlays and the Windows 60 FPS frame scheduler.

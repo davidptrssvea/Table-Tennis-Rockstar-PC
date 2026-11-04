@@ -4,9 +4,13 @@ Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D
 
 Build and play from **your own Xbox 360 disc image**. A graphical installer prepares the required components and creates the local game build for you.
 
+**v1.5.0:** Photo Mode with optical zoom and PNG capture, local achievements,
+Xbox/PlayStation prompts, in-game PC settings, friend invitations and approved
+release updates. Online play and optional UPnP remain experimental.
+
 ## Get started
 
-1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.1.2/Install-Table-Tennis.exe)**.
+1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.5.0/Install-Table-Tennis.exe)**.
 2. Open it, choose your retail **Table Tennis ISO**, allow the required components, and click **Install**.
 3. When it says **Ready to play**, click **Play**. A desktop shortcut is also created when Windows permits it.
 
@@ -16,9 +20,9 @@ On the first launch, **Saved Game** may ask whether to create a save. Choose **A
 
 First setup needs internet access, several GB of free space and time to download components and build the game. If Microsoft build components are missing, Windows may ask for administrator permission. Nothing restarts Windows automatically; if a restart is required, the installer tells you to reopen it afterward.
 
-## Updates (development branch)
+## Updates
 
-The upcoming updater-enabled release checks GitHub in the background and notifies
+Version 1.5.0 checks GitHub in the background and notifies
 you when a newer signed release is available. Open **UPDATES** in the launcher or
 **OPTIONS > PC SETTINGS > UPDATES** in the game, review the notes and approve the
 installation. Nothing installs automatically. Turn off startup checks in the launcher
@@ -26,8 +30,8 @@ if you prefer to check manually.
 
 Updates rebuild locally from your existing ISO and retain saves and settings.
 The updater keeps a previous version and recovers interrupted file changes when
-you reopen the launcher. Existing v1.1.2 users will need to install the first
-updater-enabled release once. It has **not been published yet**.
+you reopen the launcher. Existing v1.1.2 users need to install v1.5.0 once.
+Future releases can use the built-in updater.
 See [updater details](project/updater/README.md). Update signatures do not replace
 Windows code signing or eliminate SmartScreen warnings.
 
@@ -41,7 +45,7 @@ The ISO is checked before installing large compiler components and is always ope
 
 ## PC enhancements
 
-### Community features (development branch)
+### New in v1.5.0
 
 The mouse cursor hides after two seconds of inactivity in the game window and
 reappears when you move the mouse.
@@ -50,7 +54,7 @@ The Windows port adapts the achievement UI, PlayStation artwork and networking
 from [ThisIsAkill/Table-Tennis-Linux](https://github.com/ThisIsAkill/Table-Tennis-Linux),
 commit `7bff91c561fa0e424562c6d851b9008e9fc9511e`. Thanks to **ThisIsAkill**!
 The [MIT notice](licenses/Table-Tennis-Linux/NOTICE.txt) is retained; SDK changes
-retain ReXGlue's BSD license. These features are not in the v1.1.2 download above.
+retain ReXGlue's BSD license. Version 1.5.0 includes the matched Windows engine.
 
 - **PC SETTINGS:** open **OPTIONS > PC SETTINGS** from the main menu or pause
   menu. Change fullscreen, FPS/frame-time window, button icons and achievement
@@ -87,30 +91,19 @@ retain ReXGlue's BSD license. These features are not in the v1.1.2 download abov
   room code. Networking is disabled by default; no public server is supplied or
   automatically contacted. **QUIT TO DESKTOP** remains the final menu item.
 
-The launcher explains which player hosts the server and what both players enter.
-It displays this PC's local server address and provides a copy button. Where the
-portable server/Python tools are installed, **Start server on this PC** opens the
-server console and fills the local server address automatically. Keep that console
-open while playing. The next official community release must include these tools;
-that release remains pending multiplayer testing. The existing private test ZIP
-has not been rebuilt with this launcher change.
-
-These console controls are now under Advanced. The simpler **Host & copy
-invitation** flow below runs its server in the background and manages its lifetime.
-
-The launcher now shows an **Online build ID** derived from the game and engine
-files; compare it on both PCs before reporting a multiplayer failure. **Open game
+The launcher now shows an **Online compatibility ID** derived from the release version and exact
+engine files; compare it on both PCs before reporting a multiplayer failure. **Open game
 logs** opens the folder needed for the client crash report. See the
 [Windows online review](reports/ONLINE_REVIEW.md) for hardening, test scope and
 SmartScreen/signing status. The two-PC test is now user-confirmed working;
 Internet play still needs broader testing. Launching with your own IP/localhost
 checks the local relay and offers to start it if needed, using the selected port.
-A public community release has not been published.
+Version 1.5.0 includes these tools; online features remain experimental.
 
-**Host a friend (development branch):** choose **Host & copy invitation**. The
+**Host a friend:** choose **Host & copy invitation**. The
 launcher starts your private server in the background, selects a private room and
 copies the invitation. Your friend pastes it and chooses **Join invitation**, then
-both launch the game. Their name stays their own; different builds are rejected.
+both launch the game. Their name stays their own; different releases or engines are rejected.
 Server/room fields and older manual controls are under **Advanced network settings**.
 
 Use **Same network / shared VPN** at home or with your VPN adapter selected.
@@ -150,8 +143,8 @@ py -3 project/tools/setup_build.py --iso 'E:\Your disc.iso' --sdk '.tools/commun
 
 This compiles pinned ReXGlue v0.10.0 source plus the included Windows patch into a
 separate SDK folder. Keep its headers, libraries and DLLs together; the texture
-hook changes an engine interface. The published v1.1.2 installer uses the stock SDK. The upcoming v1.2.0
-source pins the matched Windows engine for both fresh installs and updates.
+hook changes an engine interface. Version 1.5.0 pins the matched Windows engine
+for both fresh installs and updates.
 See [relay setup](server/README.md) and [validation details](reports/LOCAL_BUILD.md).
 
 ### Sharper 3D rendering — up to 4K
@@ -176,8 +169,9 @@ not appear in the extra space. The camera adapts to the actual game window,
 including fullscreen. Internal 3D rendering still uses the original render target
 with the selected scale; the listed sizes are display output dimensions.
 
-**Quit to desktop** is the last main-menu item. Select it and press A to close the
-game normally. Xbox Live remains unavailable.
+**QUIT TO DESKTOP** is the last main-menu item. Select it and press A to close the
+game normally. Original Xbox LIVE services remain unavailable; enable the experimental community
+ONLINE / SYSTEM LINK mode to play with a friend.
 
 ### High-refresh display options
 
@@ -200,15 +194,15 @@ F10 opens a separate native statistics window with submission rate, average/p99/
 
 ### Offline menu and startup improvements
 
-- Xbox Live removed from the main menu to avoid the unavailable online screen. Tournament, Exhibition, Training Mode, Options and Extras remain available, followed by Quit to desktop.
+- The unavailable original Xbox LIVE entry is removed in offline mode. Enabling community online exposes ONLINE / SYSTEM LINK. Tournament, Exhibition, Training Mode, Options and Extras remain available, with QUIT TO DESKTOP last.
 - A gamepad button immediately stops the startup intro and continues to the main menu after loading, without another Start press.
 - A large, centered, antialiased **LOADING MAIN MENU...** transition while the menu initializes. The skip press cannot accidentally select a menu item.
 
 ## If installation stops
 
-**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.1.2 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
+**Music plays but `LOADING MAIN MENU...` never disappears?** In v1.0.3 and earlier, the loading overlay could hide the first-run save question and block the controls needed to answer it. Download the **v1.5.0 installer**, choose the same ISO and installation folder, and rebuild. Your existing saves are retained. Afterward, answer the visible **Saved Game** question if it appears.
 
-**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.1.2 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
+**Already installed, but starting the game says `--game_data_root does not exist` even though your ISO exists?** Versions 1.0.1/1.0.2 could build with the SDK's directory-only startup code. Download the **v1.5.0 installer** above, choose your ISO and the **same installation folder**, then run Install / Recheck to rebuild with ISO support. You do not need to delete your installation. Start through **tabletennis_launcher.exe** afterward; the ISO must remain available.
 
 Click **Open log** in the installer. You can retry after fixing the reported issue; downloaded components are cached. If Windows security blocks a required component, installation stops and security settings remain unchanged.
 
@@ -220,14 +214,14 @@ Existing local saves and graphics settings are retained during repair; the selec
 
 The small installer contains project source and patch instructions. It downloads a checksum-verified, isolated Python runtime and checks for suitable build tools. If needed, it starts Microsoft's signed Visual Studio 2022 Build Tools installer with the required C++/Windows SDK/CMake/Ninja/Clang components selected. The screen asks permission for component downloads and installation before starting.
 
-It then obtains ReXGlue SDK v0.10.0, checks its pinned SHA-256, reads the supported executable and menu archive from your ISO, generates and patches the game code, and builds everything **on your PC**. No retail menu archive, XEX, ISO, generated game functions or prebuilt game executable is included in the public downloads. `Install-Table-Tennis.exe` is our own installer, not the game executable.
+It then obtains the matched Windows engine based on ReXGlue SDK v0.10.0, checks its pinned SHA-256, reads the supported executable and menu archive from your ISO, generates and patches the game code, and builds everything **on your PC**. No retail menu archive, XEX, ISO, generated game functions or prebuilt game executable is included in the public downloads. `Install-Table-Tennis.exe` is our own installer, not the game executable.
 
 Locally generated files stay under the installation folder. Do not upload `dist`, `private_work` or `project/generated`.
 
 <details>
 <summary>Developer / advanced installation</summary>
 
-The **Table-Tennis-Local-Build-v1.1.2.zip** asset is the source package for developers. It is not required by players using the installer.
+The **Table-Tennis-Source-v1.5.0.zip** asset is the source package for developers. It is not required by players using the installer.
 
 For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 **17.14 / MSVC v143 14.44 or newer** C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
@@ -243,7 +237,7 @@ Checks and source packaging:
 py -3 -m unittest discover -s tests -v
 py -3 project/tools/package_source.py --audit-index
 py -3 project/tools/package_source.py --output 'E:\ReleaseOutput'
-powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Local-Build-v1.1.2.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
+powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Source-v1.5.0.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
 ```
 
 The installer builder validates every embedded source file against the public allowlist before compilation. It rejects extra or altered payload files. Native patch rules store offsets, hashes and replacement text rather than removed original function bodies. See [implementation and validation](reports/LOCAL_BUILD.md) and [changelog](CHANGELOG.md).

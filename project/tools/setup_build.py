@@ -46,7 +46,7 @@ def find_sdk(path, offline):
                 if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != checksum:
                     temp = archive.with_suffix('.download')
                     print('Downloading the verified matched Windows engine.' if engine else 'Downloading the official ReXGlue SDK v0.10.0 (about 45 MB).', flush=True)
-                    request = urllib.request.Request(url, headers={'User-Agent': 'TableTennis-LocalBuilder/1.2.0'})
+                    request = urllib.request.Request(url, headers={'User-Agent': 'TableTennis-LocalBuilder/1.5.0'})
                     with urllib.request.urlopen(request, timeout=120) as response, temp.open('wb') as output:
                         shutil.copyfileobj(response, output)
                     if hashlib.sha256(temp.read_bytes()).hexdigest() != checksum:

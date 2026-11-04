@@ -772,12 +772,26 @@ namespace TableTennisLauncher
             return false;
         }
 
-        private string OnlineBuildId() {
+        private string OnlineBuildId() { return OnlineBuildIdForFolder(distDir); }
+        private static string OnlineBuildIdForFolder(string folder) {
             try {
+                if(!File.Exists(Path.Combine(folder,"tabletennis.exe"))) return "unavailable";
+                string versionPath=Path.Combine(folder,"install-version.txt");
+                string version=File.Exists(versionPath) && new FileInfo(versionPath).Length<=64
+                    ? File.ReadAllText(versionPath).Trim() : "";
+                bool released=Regex.IsMatch(version,@"\A[0-9]+\.[0-9]+\.[0-9]+\z");
                 using (var hash = SHA256.Create()) {
+                    // Local builds contain timestamps/compiler paths. Release identity
+                    // plus exact engine bytes is portable between independent installs.
+                    if(released) {
+                        byte[] identity=Encoding.UTF8.GetBytes("TableTennis-compat-v1\n"+version+"\n");
+                        hash.TransformBlock(identity,0,identity.Length,identity,0);
+                    }
                     byte[] buffer = new byte[65536];
-                    foreach (string name in new[]{"tabletennis.exe", "rexruntime.dll", "rexgpu-xenos.dll"})
-                        using (var input = File.OpenRead(Path.Combine(distDir, name))) {
+                    string[] files=released ? new[]{"rexruntime.dll","rexgpu-xenos.dll"}
+                        : new[]{"tabletennis.exe","rexruntime.dll","rexgpu-xenos.dll"};
+                    foreach (string name in files)
+                        using (var input = File.OpenRead(Path.Combine(folder, name))) {
                             int count;
                             while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
                                 hash.TransformBlock(buffer, 0, count, buffer, 0);
@@ -907,7 +921,7 @@ namespace TableTennisLauncher
                 Margin = new Thickness(0,6,0,0) });
             box.Children.Add(status);
             box.Children.Add(new TextBlock {
-                Text = "Online build ID: " + OnlineBuildId() + ". Use the same build on BOTH PCs.",
+                Text = "Online compatibility ID: " + OnlineBuildId() + ". Use the same release and engine on BOTH PCs.",
                 TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray, FontSize = 11,
                 Margin = new Thickness(0,7,0,0) });
             var logs = new Button { Content = "Open game logs", HorizontalAlignment = HorizontalAlignment.Left,
