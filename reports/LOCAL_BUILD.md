@@ -1,5 +1,15 @@
 # Local build and source distribution
 
+## PC SETTINGS transparency - 2026-11-04 (unreleased)
+
+Reduced the full-screen veil alpha from 185 to 100 and the dark body from 245
+to 190. Their combined opacity is approximately 84.5%, allowing a subtle view
+of the game/menu backdrop while retaining all text, selected-row, header and
+footer colors. Built and visually checked an isolated settings-page preview
+for readability and background visibility. Restored production OnPostSetup and
+rebuilt without the preview opener. Deployed experimental build `E1485BC3865F`.
+Stable root dist, private ISO ZIP and GitHub remain unchanged.
+
 ## Mouse cursor auto-hide - 2026-11-04 (unreleased)
 
 Enable the existing SDK Window kAutoHidden mode with a 2000 ms delay during

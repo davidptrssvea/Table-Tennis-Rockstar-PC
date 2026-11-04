@@ -2,6 +2,9 @@
 
 ## Unreleased - community Windows integration
 
+- Give the PC SETTINGS dark body subtle transparency and lighten its background
+  dimming, retaining opaque text, selection highlight, title and footer.
+
 - Automatically hide the game-window mouse cursor after two seconds without
   motion; reveal it immediately when the mouse moves, using the SDK cursor API.
 

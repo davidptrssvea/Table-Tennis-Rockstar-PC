@@ -202,9 +202,9 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   const float s=io.DisplaySize.y/720.f,w=io.DisplaySize.x;
   const float x=(w-920*s)/2,y=95*s,r=x+920*s;
   auto* dl=ImGui::GetForegroundDrawList();
-  dl->AddRectFilled({0,0},io.DisplaySize,IM_COL32(0,0,0,185));
+  dl->AddRectFilled({0,0},io.DisplaySize,IM_COL32(0,0,0,100));
   dl->AddRectFilled({x,y},{r,y+65*s},IM_COL32(30,56,75,255),18*s);
-  dl->AddRectFilled({x,y+70*s},{r,y+490*s},IM_COL32(12,13,16,245));
+  dl->AddRectFilled({x,y+70*s},{r,y+490*s},IM_COL32(12,13,16,190));
   auto text=[&](float px,float xx,float yy,ImU32 color,const char* value,bool heavy=true){
     auto* font=heavy?achievement_ui::HeadlineFont(px):achievement_ui::BodyFont();
     dl->AddText(font,px,{xx,yy},color,value);
