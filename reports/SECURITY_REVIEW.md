@@ -97,10 +97,35 @@ Protocol v1 shares peer tokens for direct connectivity and assumes trusted room
 members; an invited/on-path attacker or a host can observe traffic. This review
 does not prove the original game's packet handling safe against a malicious peer.
 Rate limits bound application work/output, not upstream volumetric denial of
-service. A leaked invitation can enable disruption despite throttling. Real IGD
-devices, network transitions, CGNAT/double NAT and full matches across separate
-internet connections still require physical testing. Prefer LAN/shared VPN while
+service. A leaked invitation can enable disruption despite throttling. Beyond the
+single gateway test below, other IGD devices, network transitions, CGNAT/double NAT
+and full matches across separate internet connections still require physical testing. Prefer LAN/shared VPN while
 automatic internet hosting is experimental.
+
+## Authorized physical-router check (2026-11-04)
+
+The user explicitly authorized testing their router. The production gateway client
+first confirmed UDP 27360 had no mapping. The initial 65-character rule description
+was returned with a matching 64-character prefix followed by corrupt XML data.
+Strict parsing correctly stopped setup and refused an ownership-ambiguous deletion.
+The requested finite lease counted down and its expiry was independently verified;
+no permanent-rule fallback or parser relaxation was used.
+
+Mapping descriptions are now 29 ASCII characters, retaining an installation
+identity prefix and random session suffix. A regression asserts the sub-32-byte
+format. With that change, the real production host/supervisor path passed:
+
+- Port initially unmapped; own mapping created and independently read back.
+- Enabled mapping confirmed a 300-second lease; renewal and read-back succeeded.
+- Stop hosting completed; an independent query found no mapping afterwards.
+- No live supervisor remained and the cleanup journal was absent.
+- A fresh process/discovery confirmed the port was still unmapped.
+
+Focused lifecycle and gateway security tests passed after the compatibility fix.
+This verifies creation, renewal, normal deletion and expiry on this router only;
+it does not verify an inbound connection/match from a separate internet network.
+UPnP remains experimental and off by default. No Windows firewall/global router
+configuration was changed. Raw responses and local diagnostics stay private.
 
 ## Protocol references
 

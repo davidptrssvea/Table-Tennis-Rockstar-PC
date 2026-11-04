@@ -743,3 +743,27 @@ and published release were not changed. No real router, Windows firewall/securit
 setting or public service was modified. Traffic is still unencrypted; trusted
 friends only, physical-router/Internet tests and original-game parser audit remain
 outside the validated scope. This is not independent security certification.
+## Authorized physical router test - 2026-11-04
+
+At the user's explicit request, tested the real gateway through the production
+IGD client and host supervisor. Confirmed UDP 27360 initially unmapped. The first
+65-character description triggered a corrupt router response after its first 64
+characters. Strict XML parsing refused it and ownership validation did not blindly
+delete an ambiguous rule. Observed its finite lease count down and independently
+verified expiration before another mapping attempt.
+
+Shortened descriptions to 29 ASCII characters (installation prefix plus random
+session suffix), retained legacy journal recognition, added a regression assertion.
+Real retry passed create/read-back with a 300-second enabled lease, renewal/read-
+back, Stop hosting, independent mapping absence, supervisor exit and no cleanup
+journal. A new process/discovery confirmed the port stayed absent. No Windows
+firewall or global router setting was modified, and no permanent rule was requested.
+This does not verify a match/inbound UDP from a separate internet connection.
+
+Two lifecycle/ownership tests and eleven gateway/security cases passed after the
+compatibility change. Updated the experimental launcher and existing uncompressed
+update, keeping settings and game/engine files. UPnP remains off by default and
+experimental; build ID unchanged. Source-only signed candidate refreshed. Stable
+installation, private ISO ZIP, GitHub and published release were left unchanged.
+Local hardware-test diagnostics remain under scratch/router-hardware-test and
+are excluded from source distribution. See reports/SECURITY_REVIEW.md.

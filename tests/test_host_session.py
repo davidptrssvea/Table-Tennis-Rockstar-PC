@@ -49,6 +49,8 @@ class Probe {
   System.IO.File.WriteAllText(System.IO.Path.Combine(root,"dist","settings.ini"),"fixture");
   try {
    string token=Guid.NewGuid().ToString("N"),folder=HostSession.Folder(root),session=HostSession.SessionFolder(root,token);
+   string description=HostSession.MappingDescription(root,token);
+   Assert(description.Length<32 && System.Text.Encoding.ASCII.GetByteCount(description)==description.Length && description.StartsWith("TTR-"));
    System.IO.Directory.CreateDirectory(session);
    System.IO.File.WriteAllText(System.IO.Path.Combine(folder,"active.txt"),token);
    System.IO.File.WriteAllText(System.IO.Path.Combine(session,"status.txt"),"state=ready\\naddress=8.8.8.8:27360\\nlocal=192.168.1.5:27360\\n");

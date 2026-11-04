@@ -71,6 +71,11 @@ namespace TableTennisLauncher {
         static string Identity(string root) {
             using(var hash=SHA256.Create()) return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(Environment.MachineName+"|"+Path.GetFullPath(root).ToUpperInvariant()))).Replace("-","").Substring(0,20);
         }
+        public static string MappingDescription(string root,string token) {
+            if(!Regex.IsMatch(token??"",@"\A[0-9a-f]{32}\z")) throw new ArgumentException("Invalid host session");
+            // Some real IGD firmware corrupts long descriptions. Keep below 32 ASCII bytes.
+            return "TTR-"+Identity(root).Substring(0,8)+"-"+token.Substring(0,16);
+        }
         public static bool PublicIPv4(string text) {
             IPAddress address;
             if(!IPAddress.TryParse(text,out address) || address.AddressFamily!=AddressFamily.InterNetwork) return false;
@@ -200,7 +205,8 @@ namespace TableTennisLauncher {
             string file=Path.Combine(folder,"router.txt");if(!File.Exists(file)) return;
             var old=Fields(file);
             string prefix="TableTennis-"+Identity(root);
-            if(old["description"]==prefix || Regex.IsMatch(old["description"],"\\A"+prefix+"-[0-9a-f]{32}\\z")) {
+            if(old["description"]==prefix || Regex.IsMatch(old["description"],"\\A"+prefix+"-[0-9a-f]{32}\\z") ||
+               Regex.IsMatch(old["description"],"\\ATTR-"+Identity(root).Substring(0,8)+"-[0-9a-f]{16}\\z")) {
                 if(!IsLocal(IPAddress.Parse(old["client"]))) throw new IOException("Return to the original host network to retry old router cleanup.");
                 if(current!=null) RemoveRouter(current,Port,old["client"],old["description"]);
                 else using(var router=old.ContainsKey("provider") && old["provider"]=="lease"?(IHostRouter)new GatewayLeaseRouter(old["client"]):new WindowsHostRouter()) RemoveRouter(router,Port,old["client"],old["description"]);
@@ -250,7 +256,7 @@ namespace TableTennisLauncher {
                     string address=client+":"+Port;
                     if(mode=="upnp") {
                         status("starting","","Asking your router for an internet connection...");
-                        string description="TableTennis-"+Identity(root)+"-"+token;
+                        string description=MappingDescription(root,token);
                         leaseRouter=new GatewayLeaseRouter(client);
                         Write(Path.Combine(folder,"router.txt"),"provider=lease\nclient="+client+"\ndescription="+description+"\n");
                         address=OpenRouter(leaseRouter,Port,client,description);
@@ -265,7 +271,7 @@ namespace TableTennisLauncher {
                     while(!relay.HasExited && !File.Exists(Path.Combine(session,"stop"))) {
                         if(lifetime.Elapsed>TimeSpan.FromHours(4)) break;
                         if(leaseRouter!=null && lifetime.Elapsed-renewed>TimeSpan.FromSeconds(90)) {
-                            if(RenewRouter(leaseRouter,Port,client,"TableTennis-"+Identity(root)+"-"+token)!=address) throw new IOException("Your public address changed. Start a new host and send a new invitation.");
+                            if(RenewRouter(leaseRouter,Port,client,MappingDescription(root,token))!=address) throw new IOException("Your public address changed. Start a new host and send a new invitation.");
                             renewed=lifetime.Elapsed;
                         }
                         string gameFile=Path.Combine(session,"game.txt");
