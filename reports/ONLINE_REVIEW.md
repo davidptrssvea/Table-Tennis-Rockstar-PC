@@ -3,7 +3,8 @@
 This review covers the community Windows branch, not the published v1.1.2 release.
 The second PC's logs were received on 2026-11-04 and identify an unregistered
 callback at 0x823A83F8. The reviewed update includes this callback; a fresh
-physical two-PC test is still required. See the log follow-up below.
+physical two-PC test was subsequently reported working by the user on
+2026-11-04. See the dated follow-ups below.
 
 ## Corrections
 
@@ -126,3 +127,27 @@ registrations for this client callback as well as the CREATE MATCH callback.
 No new game/SDK binary was needed for this diagnostic follow-up. The private ZIP
 and official release remain unchanged. Logs and private machine addresses were
 not added to public source.
+
+## User confirmation and local server launch guard - 2026-11-04
+
+After installing the matched update, the user reported that everything worked
+on the two physical PCs. This supersedes the earlier request for confirmation;
+it does not establish Internet/NAT, spectator or long-session coverage.
+
+The launcher now checks an enabled online server address before launching if it
+is localhost, this machine's name, or an active local IPv4 address. A short UDP
+unknown-client keepalive verifies a real TTV1 relay response without joining a
+room or creating a player. A silent or unrelated UDP listener is not healthy.
+Remote addresses are left alone. Local startup is offered via Yes/No; declining
+keeps the launcher open. Accepting uses the selected port, checks both TCP/UDP
+port conflicts and bundled tools, and waits asynchronously for readiness before
+starting the game. Failure leaves the game closed with an explanatory message.
+The existing manual start button uses the same startup path.
+
+The launcher regression covers own-interface/default/custom-port detection,
+remote addresses, closed and unrelated UDP ports, a real responding Windows
+relay and absence of player records from probes. Its six validation/protocol
+tests pass. Only the launcher and public source/docs changed for this feature;
+the game/engine build ID remains 572B1869C071. The local experimental launcher
+and separate update folder were refreshed; the private ZIP and published release
+were not changed.

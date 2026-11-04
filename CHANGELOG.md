@@ -2,6 +2,11 @@
 
 ## Unreleased - community Windows integration
 
+- Before launching online with this PC's IP/localhost, probe the relay's UDP
+  protocol. If it does not respond, offer to start the bundled server on the
+  selected port and wait for readiness; keep the game closed if declined or
+  unsuccessful. Leave remote server addresses alone and reject occupied ports.
+
 - Harden Windows networking: preserve native socket width, serialize delayed
   sends with socket lifetime, discard old-room queues and validate socket setup.
 - Keep the Windows Python relay receiving after a departing UDP peer triggers

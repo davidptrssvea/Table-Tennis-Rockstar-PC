@@ -59,8 +59,10 @@ The launcher now shows an **Online build ID** derived from the game and engine
 files; compare it on both PCs before reporting a multiplayer failure. **Open game
 logs** opens the folder needed for the client crash report. See the
 [Windows online review](reports/ONLINE_REVIEW.md) for hardening, test scope and
-SmartScreen/signing status. Separate-PC client crashes and Internet play remain
-under investigation; a public community release has not been published.
+SmartScreen/signing status. The two-PC test is now user-confirmed working;
+Internet play still needs broader testing. Launching with your own IP/localhost
+checks the local relay and offers to start it if needed, using the selected port.
+A public community release has not been published.
 
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room

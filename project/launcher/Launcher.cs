@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -24,6 +25,7 @@ namespace TableTennisLauncher
 
     public class MainWindow : Window
     {
+        private bool checkingLaunch;
         private ComboBox comboButtons;
         private CheckBox chkNetwork;
         private TextBox txtServer, txtPlayer, txtRoom;
@@ -471,6 +473,88 @@ namespace TableTennisLauncher
             return value.Length == 0 || Regex.IsMatch(value, @"\A[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}\z");
         }
 
+        private static IPEndPoint LocalServerEndpoint(string value) {
+            if (!ValidServer(value)) return null;
+            string[] parts = value.Split(':');
+            int port = parts.Length == 2 ? int.Parse(parts[1]) : 27360;
+            IPAddress address;
+            if (parts[0].Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                parts[0].Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+                address = IPAddress.Loopback;
+            else if (!IPAddress.TryParse(parts[0], out address) ||
+                     address.AddressFamily != AddressFamily.InterNetwork) return null;
+            if (IPAddress.IsLoopback(address)) return new IPEndPoint(address, port);
+            try {
+                foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()) {
+                    if (adapter.OperationalStatus != OperationalStatus.Up) continue;
+                    foreach (var entry in adapter.GetIPProperties().UnicastAddresses)
+                        if (entry.Address.Equals(address)) return new IPEndPoint(address, port);
+                }
+            } catch { }
+            return null;
+        }
+
+        private static bool RelayResponds(IPEndPoint endpoint) {
+            try {
+                using (var socket = new UdpClient(AddressFamily.InterNetwork)) {
+                    socket.Client.ReceiveTimeout = 400;
+                    socket.Connect(endpoint);
+                    // An unknown-client keepalive gets ERROR/ERR_UNKNOWN without
+                    // joining a room or changing any real player's session.
+                    byte[] request = new byte[17];
+                    request[0]=84; request[1]=84; request[2]=86; request[3]=49; request[4]=4;
+                    socket.Send(request, request.Length);
+                    IPEndPoint source = null;
+                    byte[] reply = socket.Receive(ref source);
+                    return reply.Length >= 7 && reply[0]==84 && reply[1]==84 &&
+                        reply[2]==86 && reply[3]==49 && reply[4]==12 && reply[5]==5 &&
+                        reply.Length == 7 + reply[6];
+                }
+            } catch { return false; }
+        }
+
+        private Process StartLocalRelay(int port) {
+            string root = Path.GetDirectoryName(distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            string python = Path.Combine(root, "tools", "python", "python.exe");
+            if (!File.Exists(python)) python = Path.Combine(root, ".tools", "python314", "python.exe");
+            string server = Path.Combine(root, "server", "ttlink_server.py");
+            if (!File.Exists(python) || !File.Exists(server))
+                throw new InvalidOperationException("The bundled server tools are missing. Restore the complete installation or enter the other PC's server address.");
+            foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners())
+                if (endpoint.Port == port) throw new InvalidOperationException("UDP port " + port + " is already in use. Check the existing server window; another server will not be started.");
+            foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())
+                if (endpoint.Port == port) throw new InvalidOperationException("TCP port " + port + " is already in use. Close the conflicting application or choose a different server port.");
+            var process = Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port " + port) {
+                WorkingDirectory = root, UseShellExecute = true });
+            if (process == null) throw new InvalidOperationException("Windows did not start the server.");
+            return process;
+        }
+
+        private async Task<bool> EnsureLocalRelay() {
+            var endpoint = LocalServerEndpoint(txtServer.Text.Trim());
+            if (endpoint == null) return true; // Another PC hosts it.
+            if (await Task.Run(() => RelayResponds(endpoint))) return true;
+            if (MessageBox.Show(this,
+                "The server address points to THIS PC, but the Table Tennis server is not responding.\n\nStart the server on this PC now? Keep its window open while playing.",
+                "Online server is not running", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return false;
+            try {
+                using (var process = StartLocalRelay(endpoint.Port)) {
+                    for (int attempt=0; attempt<12; ++attempt) {
+                        if (await Task.Run(() => RelayResponds(endpoint))) return true;
+                        if (process.HasExited) break;
+                        await Task.Delay(200);
+                    }
+                }
+                MessageBox.Show(this, "The server did not become ready. Check its window and any Windows network permission prompt, then try Launch Game again.",
+                    "Server not ready", MessageBoxButton.OK, MessageBoxImage.Warning);
+            } catch (Exception ex) {
+                MessageBox.Show(this, "Could not start the local server: " + ex.Message,
+                    "Server not ready", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return false;
+        }
+
         private string OnlineBuildId() {
             try {
                 using (var hash = SHA256.Create()) {
@@ -497,7 +581,8 @@ namespace TableTennisLauncher
                 Text = "1. ONE player starts the server below and leaves its window open.\n" +
                     "2. BOTH players enable online play and enter the SAME server address.\n" +
                     "3. Choose different player names and the SAME private room code (e.g. ABC234).\n" +
-                    "4. In the game: ONLINE > PLAYER MATCH. One creates a match; the other uses QUICK MATCH.",
+                    "4. In the game: ONLINE > PLAYER MATCH. One creates a match; the other uses QUICK MATCH.\n" +
+                    "Launch Game checks a server address belonging to this PC and offers to start the server if it is not responding.",
                 TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightGray,
                 FontSize = 11, Margin = new Thickness(0,6,0,8) });
             var root = Path.GetDirectoryName(distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -519,14 +604,7 @@ namespace TableTennisLauncher
             };
             start.Click += (sender, args) => {
                 try {
-                    foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners())
-                        if (endpoint.Port == 27360) {
-                            status.Text = "UDP port 27360 is already in use. If your server window is already open, keep it open and use the address below.";
-                            return;
-                        }
-                    var process = Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port 27360") {
-                        WorkingDirectory = root, UseShellExecute = true });
-                    if (process == null) throw new InvalidOperationException("Windows did not start the server.");
+                    var process = StartLocalRelay(27360);
                     start.IsEnabled = false;
                     process.Exited += (source, eventArgs) => {
                         if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(() => {
@@ -724,7 +802,16 @@ namespace TableTennisLauncher
             catch { }
         }
 
-        private void LaunchGame()
+        private async void LaunchGame() {
+            if (checkingLaunch) return;
+            checkingLaunch = true;
+            var content = (UIElement)Content;
+            content.IsEnabled = false;
+            try { await LaunchGameChecked(); }
+            finally { checkingLaunch = false; content.IsEnabled = true; }
+        }
+
+        private async Task LaunchGameChecked()
         {
             string selectedIso = txtIsoPath.Text.Trim();
             if (string.IsNullOrEmpty(selectedIso) || !File.Exists(selectedIso))
@@ -740,6 +827,7 @@ namespace TableTennisLauncher
                 MessageBox.Show("Enter a server host (optional port: 1-65535), a player name (1-15 letters/numbers/spaces), and either no room code or exactly 6 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789. Example: ABC234.", "Online settings", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            if (HasCommunityEngine && chkNetwork.IsChecked == true && !await EnsureLocalRelay()) return;
             SaveSettings();
 
             int width = 1920;
