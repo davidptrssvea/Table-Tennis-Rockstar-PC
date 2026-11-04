@@ -561,3 +561,58 @@ production build and all three ISO boot subcases passed. No new tests were added
 for this reversible visual change. Local experimental EXE and uncompressed update
 were refreshed with backups; settings, stable desktop installation, private ZIP
 and published release were left alone. Matched online build ID: E02C432D8073.
+## Signed release updater - 2026-11-04 (local candidate, not published)
+
+Implemented the user's approved GitHub update flow for the upcoming v1.2.0:
+background stable-release detection, an opt-out checkbox and manual controls in
+UPDATES, a brief frontend notification and OPTIONS > PC SETTINGS > UPDATES.
+Installation is a separate explicit Yes/No action. The updater downloads only
+public source plus the matched game-free engine, verifies the pinned RSA-3072 /
+SHA-256 manifest and archive hashes, then rebuilds from the existing retail ISO.
+The normal first installer now pins the same engine via project/engine.json.
+Existing v1.1.2 users must install the first updater-enabled release once.
+
+File activation is journaled with backups. Recovery runs before another game
+launch; Restore previous version retains current settings and saves. Cancellation
+stops only the owned build process tree, and activation completes/rolls back as a
+transaction. Package extraction rejects unsafe Windows paths, duplicate names,
+links and excessive expansion. Downgrades and unsigned/foreign/incompatible
+release packages are refused. Build-tool installation is a separate checkbox and
+uses the official Microsoft installer with Authenticode verification. No Windows
+security settings are changed. Manifest signing is not Windows code signing and
+cannot promise removal of SmartScreen warnings.
+
+Validation on this machine:
+- All 53 tests passed with native pacing/layout, matched Windows SDK/network,
+  virtual controller and production ISO-boot checks enabled. This includes 25
+  updater tests of signatures, release discovery, corrupted downloads, extraction,
+  interrupted installation/rollback, locking and preserved data. A further two
+  targeted tests passed for the default pinned engine download and corrupt-engine
+  rejection (55 checks across those runs).
+- A real project-key-signed local v1.2.0 source/engine package was applied to an
+  isolated v1.1.9 fixture using the actual updater backend and embedded Python.
+  It regenerated the game, verified 57 registrations and 23 native edit hashes,
+  compiled all 103 targets, matched DLLs to the engine and activated successfully.
+  Settings bytes, a save sentinel and an unrelated user file were retained.
+- Rollback restored the exact prior game hash and v1.1.9 metadata; the same
+  settings/save/user file remained unchanged and the recovery marker cleared.
+- The installed production helper checked the real GitHub API successfully. The
+  current legacy release has no signed manifest, so no installation is offered.
+  Test-feed overrides are compiled out of production. No controller test hook is
+  present in the production game.
+- The locally rebuilt updater and launcher compile with the game icon. Windows
+  computer-use returned GetCursorPos / Access is denied, preventing visual GUI
+  inspection in this session. Interactive approval/cancel/UAC and a clean PC with
+  missing compilers still require manual end-to-end UI testing. The full local
+  build/activation/rollback path was tested through the production backend.
+
+Installed 45 support/runtime files into scratch/community-feature-test/dist and
+refreshed scratch/online-audit-update. Settings were byte-checked unchanged, and
+stable root dist/tabletennis.exe was hash-checked unchanged. Backups are in
+scratch/updater-local-backup-20261104. Online build ID: 92C1FB9231FA.
+Game SHA-256: d7206e9865835e4170e67f4efd28be7f17d1fd0eb5fe13131e345b1acaacc073.
+The private ISO ZIP and published release were not changed. Signed source-only
+candidate assets are in scratch/updater-release-candidate, with a locally compiled
+first-installer candidate. Signing key material stays outside the repository,
+protected by the maintainer's Windows profile; only the public trust key is in
+source. See project/updater/README.md for the release/signing procedure.

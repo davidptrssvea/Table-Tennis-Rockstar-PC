@@ -16,6 +16,21 @@ On the first launch, **Saved Game** may ask whether to create a save. Choose **A
 
 First setup needs internet access, several GB of free space and time to download components and build the game. If Microsoft build components are missing, Windows may ask for administrator permission. Nothing restarts Windows automatically; if a restart is required, the installer tells you to reopen it afterward.
 
+## Updates (development branch)
+
+The upcoming updater-enabled release checks GitHub in the background and notifies
+you when a newer signed release is available. Open **UPDATES** in the launcher or
+**OPTIONS > PC SETTINGS > UPDATES** in the game, review the notes and approve the
+installation. Nothing installs automatically. Turn off startup checks in the launcher
+if you prefer to check manually.
+
+Updates rebuild locally from your existing ISO and retain saves and settings.
+The updater keeps a previous version and recovers interrupted file changes when
+you reopen the launcher. Existing v1.1.2 users will need to install the first
+updater-enabled release once. It has **not been published yet**.
+See [updater details](project/updater/README.md). Update signatures do not replace
+Windows code signing or eliminate SmartScreen warnings.
+
 ## What you need
 
 - Windows 10/11 **x64**, an AVX2 CPU and a DirectX 12 GPU.
@@ -94,7 +109,8 @@ py -3 project/tools/setup_build.py --iso 'E:\Your disc.iso' --sdk '.tools/commun
 
 This compiles pinned ReXGlue v0.10.0 source plus the included Windows patch into a
 separate SDK folder. Keep its headers, libraries and DLLs together; the texture
-hook changes an engine interface. The ordinary installer uses the stock SDK.
+hook changes an engine interface. The published v1.1.2 installer uses the stock SDK. The upcoming v1.2.0
+source pins the matched Windows engine for both fresh installs and updates.
 See [relay setup](server/README.md) and [validation details](reports/LOCAL_BUILD.md).
 
 ### Sharper 3D rendering — up to 4K

@@ -1,6 +1,7 @@
 """Build the game locally from the user's own verified retail ISO (Windows x64)."""
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -11,6 +12,7 @@ import urllib.request
 import zipfile
 
 from disc_image import extract, validate
+from build_updater import install_support
 from patch_menu import patch as patch_menu
 from patch_native import patch as patch_native
 
@@ -28,23 +30,26 @@ def find_sdk(path, offline):
     if path:
         sdk = Path(path).resolve()
     else:
-        sdk = ROOT / '.tools/sdk'
+        engine_file = ROOT / 'project/engine.json'
+        engine = json.loads(engine_file.read_text()) if engine_file.exists() else None
+        url, checksum = (engine['url'], engine['sha256']) if engine else (SDK_URL, SDK_SHA256)
+        sdk = ROOT / '.tools' / ('engine-' + checksum[:12] if engine else 'sdk')
         if not (sdk / 'bin/rexglue.exe').is_file():
             matches = list(sdk.glob('**/bin/rexglue.exe')) if sdk.exists() else []
             if len(matches) == 1:
                 sdk = matches[0].parents[1]
             else:
                 if offline:
-                    raise ValueError('No cached SDK. Supply --sdk PATH or permit the official SDK download.')
-                archive = ROOT / '.tools/rexglue-sdk-0.10.0.zip'
+                    raise ValueError('No cached engine. Supply --sdk PATH or permit the verified engine download.')
+                archive = ROOT / '.tools' / ('engine-' + checksum[:12] + '.zip' if engine else 'rexglue-sdk-0.10.0.zip')
                 archive.parent.mkdir(parents=True, exist_ok=True)
-                if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != SDK_SHA256:
+                if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != checksum:
                     temp = archive.with_suffix('.download')
-                    print('Downloading the official ReXGlue SDK v0.10.0 (about 45 MB).', flush=True)
-                    request = urllib.request.Request(SDK_URL, headers={'User-Agent': 'TableTennis-LocalBuilder/1.1.2'})
+                    print('Downloading the verified matched Windows engine.' if engine else 'Downloading the official ReXGlue SDK v0.10.0 (about 45 MB).', flush=True)
+                    request = urllib.request.Request(url, headers={'User-Agent': 'TableTennis-LocalBuilder/1.2.0'})
                     with urllib.request.urlopen(request, timeout=120) as response, temp.open('wb') as output:
                         shutil.copyfileobj(response, output)
-                    if hashlib.sha256(temp.read_bytes()).hexdigest() != SDK_SHA256:
+                    if hashlib.sha256(temp.read_bytes()).hexdigest() != checksum:
                         raise ValueError('SDK download checksum mismatch; file was not used')
                     temp.replace(archive)
                 with zipfile.ZipFile(archive) as package:
@@ -181,6 +186,8 @@ def main():
         lines = [line for line in settings.read_text(encoding='utf-8-sig').splitlines()
                  if not line.lower().startswith('iso_path=')]
         settings.write_text(f'iso_path={iso}\n' + '\n'.join(lines) + '\n', encoding='utf-8')
+    print('STAGE:Installing update support', flush=True)
+    install_support(ROOT, dist, csc, args.no_download)
     print(f'Build complete. Start {dist / "tabletennis_launcher.exe"}. Keep this local build private.', flush=True)
 
 

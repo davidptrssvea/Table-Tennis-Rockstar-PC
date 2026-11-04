@@ -185,7 +185,7 @@ namespace TableTennisSetup {
                 int exit = await Task.Run(delegate {
                     Directory.CreateDirectory(target);
                     logPath = Path.Combine(target, "installation.log");
-                    File.WriteAllText(logPath, "Table Tennis local installer v1.1.2" + Environment.NewLine, Encoding.UTF8);
+                    File.WriteAllText(logPath, "Table Tennis local installer v1.2.0" + Environment.NewLine, Encoding.UTF8);
                     ExtractSource(target);
                     string script = Path.Combine(target, "project", "tools", "bootstrap.ps1");
                     string args = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(script) + " -Root " + Quote(target) + " -IsoPath " + Quote(image) + " -AllowToolInstall";

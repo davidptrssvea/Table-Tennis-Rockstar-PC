@@ -8,6 +8,7 @@
 #include "intro_skip.h"
 #include "pc_features.h"
 #include "pc_settings.h"
+#include "update_ui.h"
 #include "achievement_ui.h"
 #include "button_prompts.h"
 #include "system_link.h"
@@ -149,6 +150,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ~TabletennisApp() override {
+    tabletennis::updates::Stop();
     tabletennis::pc_settings::SetOpenCallback({});
     tabletennis::pc::SetAchievementsToggle({});
     tabletennis::pc::SetWindow(nullptr);
@@ -179,6 +181,10 @@ class TabletennisApp : public rex::ReXApp {
 
     auto exe_dir = rex::filesystem::GetExecutableFolder();
     auto root_dir = exe_dir.parent_path();
+    if(std::filesystem::exists(root_dir/".updates/in-progress")) {
+      MessageBoxW(nullptr,L"An update is in progress or was interrupted. Open the launcher to finish or recover it.",L"Table Tennis update",MB_OK|MB_ICONINFORMATION);
+      std::exit(0);
+    }
 
     // Scan settings.ini in executable folder
     std::filesystem::path settings_path = exe_dir / "settings.ini";
@@ -417,6 +423,9 @@ class TabletennisApp : public rex::ReXApp {
       app_context().CallInUIThreadDeferred([this] {
         if(window()) new tabletennis::pc_settings::SettingsPage(imgui_drawer(),window());
       });
+    });
+    tabletennis::updates::Start([this](std::string version) {
+      app_context().CallInUIThreadDeferred([this,version] {new tabletennis::updates::UpdateToast(imgui_drawer(),version);});
     });
     tabletennis::prompts::Init(runtime()->memory(),runtime()->graphics_system());
     if (window()) {

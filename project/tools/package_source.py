@@ -1,6 +1,7 @@
 """Audit and package the explicit public source allowlist; never package dist."""
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import zipfile
@@ -10,6 +11,9 @@ ROOT_FILES = {'README.md', 'LICENSE', 'CHANGELOG.md', '.gitignore', 'setup.cmd',
 FIXED_FILES = {
     'project/assets/tabletennis.ico', 'licenses/Icon/CREDITS.txt',
     'project/CMakeLists.txt', 'project/tabletennis_manifest.toml', 'project/overrides.toml',
+    'project/release.json', 'project/engine.json', 'project/updater/Updater.cs', 'project/updater/UpdateCore.cs',
+    'project/updater/README.md', 'project/updater/release-public-key.xml', 'project/updater/update_backend.py',
+    'project/tools/build_updater.py', 'project/tools/sign_update.ps1', 'project/tools/prepare_update.py',
     'project/cmake/rexglue.cmake', 'project/launcher/Launcher.cs',
     'project/src/main.cpp', 'project/src/tabletennis_app.h', 'project/src/offline_menu_device.h',
     'project/src/intro_skip.cpp', 'project/src/intro_skip.h',
@@ -17,6 +21,7 @@ FIXED_FILES = {
     'project/src/frame_schedule.h', 'tests/frame_pacing_test.cpp',
     'project/src/pc_features.cpp', 'project/src/pc_features.h',
     'project/src/pc_settings.cpp', 'project/src/pc_settings.h', 'project/src/settings_store.h',
+    'project/src/update_ui.cpp', 'project/src/update_ui.h',
     'project/tools/menu_settings.py',
     'project/src/achievement_ui.cpp', 'project/src/achievement_ui.h',
     'project/src/button_prompts.cpp', 'project/src/button_prompts.h', 'project/src/button_prompt_art.inc',
@@ -34,7 +39,8 @@ FIXED_FILES = {
     'project/sdk-overrides/rex_app.cpp',
     'project/tools/disc_image.py', 'project/tools/patch_menu.py', 'project/tools/patch_native.py',
     'project/tools/native_edits.json', 'project/tools/setup_build.py', 'project/tools/package_source.py',
-    'tests/test_local_build.py', 'licenses/ReXGlue/LICENSE.txt', 'licenses/SDL3/LICENSE.txt',
+    'tests/test_local_build.py', 'tests/test_update_backend.py', 'tests/test_update_client.py',
+    'licenses/ReXGlue/LICENSE.txt', 'licenses/SDL3/LICENSE.txt',
     'reports/LOCAL_BUILD.md',
     'reports/ONLINE_REVIEW.md',
     'project/installer/Installer.cs', 'project/tools/bootstrap.ps1', 'project/tools/build_installer.ps1',
@@ -62,7 +68,8 @@ def package(output):
     files = audit()
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    path = output / 'Table-Tennis-Local-Build-v1.1.2.zip'
+    version = json.loads((ROOT / 'project/release.json').read_text(encoding='utf-8-sig'))['version']
+    path = output / f'Table-Tennis-Local-Build-v{version}.zip'
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name in files:
             archive.write(ROOT / name, name)

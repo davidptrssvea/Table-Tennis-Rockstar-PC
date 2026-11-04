@@ -2,6 +2,14 @@
 
 ## Unreleased - community Windows integration
 
+- Add opt-out background release checks, launcher update controls, a main-menu
+  notification and a PC SETTINGS > UPDATES action. Installation requires approval.
+- Verify signed release metadata and source/engine checksums, rebuild locally from
+  the existing ISO, and install with backups and crash recovery. Preserve settings,
+  saves and unrelated files. Bundle the updater, Python and relay tools.
+- Pin the matched community engine for the upcoming v1.2.0 installer and updates;
+  existing releases remain unchanged. No Windows security settings are changed.
+
 - Polish Xbox buttons in PC SETTINGS and achievements: shaded caps, dark rims,
   subtle highlights/shadows and letters centered by their visible glyph bounds.
   Retain the selected PlayStation symbols.

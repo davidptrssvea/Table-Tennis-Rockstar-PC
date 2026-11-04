@@ -1,5 +1,6 @@
 #include "pc_settings.h"
 #include "settings_store.h"
+#include "update_ui.h"
 #include "button_prompts.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
@@ -78,6 +79,7 @@ void SetOpenCallback(std::function<void()> callback) {
 }
 void PollFrontend(PPCContext& ctx,uint8_t* base,uint32_t movie) {
   if(!movie) return;
+  updates::NotifyInFrontend(ctx,base,movie);
   auto name=FlagName(base); if(!name) return;
   auto call=ctx; call.r3.u64=movie;call.r4.u64=name;sub_823F9280(call,base);
   if(!call.r3.u32) return;
@@ -136,7 +138,8 @@ struct SettingsPage::State {
     {"post","SHARPENING / SCALING","Choose the output filter. Applies after restarting the game.",{"bilinear","cas","fsr"},{"BILINEAR","CAS","FSR"},2,true},
     {"show_fps","FPS / FRAME TIMES","Open the separate F10 timing window. Gameplay stays paced at 60 FPS.",{"false","true"},{"OFF","ON"}},
     {"button_prompts","BUTTON ICONS","AUTO follows the controller in use. Changes apply immediately.",{"auto","xbox","playstation"},{"AUTO","XBOX","PLAYSTATION"}},
-    {"achievement_sound","ACHIEVEMENT SOUND","Play a sound when an achievement unlocks.",{"false","true"},{"OFF","ON"},1}
+    {"achievement_sound","ACHIEVEMENT SOUND","Play a sound when an achievement unlocks.",{"false","true"},{"OFF","ON"},1},
+    {"updates","UPDATES","Check signed releases. Installation only starts after you approve it in the updater.",{""},{"CHECK NOW"}}
   };
   int row=0,repeat_direction=0;
   double repeat_at=0;
@@ -159,6 +162,7 @@ SettingsPage::~SettingsPage() {
   REXLOG_INFO("Tabletennis: PC SETTINGS closed; game-only presentation restored");
 }
 void SettingsPage::Change(int delta) {
+  if(state_->row==7) {updates::Open();return;}
   auto& row=state_->rows[state_->row];
   row.selected=(row.selected+delta+int(row.values.size()))%int(row.values.size());
   const std::string value=row.values[row.selected];
@@ -176,7 +180,7 @@ bool SettingsPage::Save() {
   auto temp=path;temp+=".pc-settings.tmp";
   try {
     settings_store::Values updates;
-    for(const auto& row:state_->rows) updates[row.key]=row.values[row.selected];
+    for(const auto& row:state_->rows) if(std::string(row.key)!="updates") updates[row.key]=row.values[row.selected];
     auto text=settings_store::Merge(ReadIni(),updates);
     { std::ofstream file(temp,std::ios::binary|std::ios::trunc);
       file.exceptions(std::ios::failbit|std::ios::badbit);file.write(text.data(),text.size());file.close(); }
@@ -207,16 +211,17 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   };
   text(38*s,x+28*s,y+12*s,IM_COL32(255,209,0,255),"PC SETTINGS");
   for(size_t i=0;i<state_->rows.size();++i) {
-    const auto& row=state_->rows[i];const float yy=y+84*s+i*46*s;
+    const auto& row=state_->rows[i];const float yy=y+84*s+i*40*s;
     const bool selected=int(i)==state_->row;
-    if(selected) dl->AddRectFilled({x+12*s,yy-3*s},{r-12*s,yy+40*s},IM_COL32(47,49,51,255));
+    if(selected) dl->AddRectFilled({x+12*s,yy-3*s},{r-12*s,yy+37*s},IM_COL32(47,49,51,255));
     const auto color=selected?IM_COL32(255,209,0,255):IM_COL32(205,207,211,255);
     text(23*s,x+28*s,yy,color,row.label);
-    const auto label=std::string(row.labels[row.selected])+(row.restart?" *":"");
+    auto label=std::string(row.labels[row.selected])+(row.restart?" *":"");
+    if(i==7) {auto update=updates::GetStatus();if(update.state=="available") label="UPDATE "+update.version;}
     auto* font=achievement_ui::HeadlineFont(23*s);
     auto size=font->CalcTextSizeA(23*s,FLT_MAX,0,label.c_str());
     text(23*s,r-28*s-size.x,yy,color,label.c_str());
-    if(ImGui::IsMouseClicked(0) && io.MousePos.x>x && io.MousePos.x<r && io.MousePos.y>yy && io.MousePos.y<yy+40*s) {
+    if(ImGui::IsMouseClicked(0) && io.MousePos.x>x && io.MousePos.x<r && io.MousePos.y>yy && io.MousePos.y<yy+37*s) {
       state_->row=int(i);Change(1);
     }
   }

@@ -17,16 +17,27 @@ namespace TableTennisLauncher
     public class Program
     {
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
+            string dist=AppDomain.CurrentDomain.BaseDirectory;
+            string root=Path.GetDirectoryName(dist.TrimEnd('\\'));
+            if(File.Exists(Path.Combine(root,".updates","in-progress"))) {
+                string recovery=Path.Combine(root,".updates","runner","tabletennis_updater.exe");
+                if(File.Exists(recovery)) Process.Start(new ProcessStartInfo(recovery,"--recover --root "+"\""+root+"\"") {UseShellExecute=false});
+                else MessageBox.Show("An update was interrupted. Restore the updater support files or re-run the installer.","Table Tennis update");
+                return;
+            }
             var app = new Application();
-            app.Run(new MainWindow());
+            app.Run(new MainWindow {PlayAfterUpdate=Array.IndexOf(args,"--play-after-update")>=0});
         }
     }
 
     public class MainWindow : Window
     {
-        private bool checkingLaunch;
+        public bool PlayAfterUpdate {get;set;}
+        private bool checkingLaunch, checkingUpdates;
+        private CheckBox chkAutoUpdates;
+        private TextBlock updateNotice, updateStatus;
         private ComboBox comboButtons;
         private CheckBox chkNetwork;
         private TextBox txtServer, txtPlayer, txtRoom;
@@ -53,6 +64,11 @@ namespace TableTennisLauncher
 
             BuildUI();
             LoadSettings();
+            Loaded+=async (sender,args)=>{
+                Task background=chkAutoUpdates.IsChecked==true?CheckUpdates(false):Task.FromResult(false);
+                if(PlayAfterUpdate) LaunchGame();
+                await background;
+            };
         }
 
         private void BuildUI()
@@ -82,6 +98,9 @@ namespace TableTennisLauncher
             };
             headerPanel.Children.Add(title);
             headerPanel.Children.Add(subtitle);
+            updateNotice=new TextBlock {Foreground=Brushes.Gold,FontWeight=FontWeights.Bold,TextWrapping=TextWrapping.Wrap,
+                Margin=new Thickness(0,8,0,0),Visibility=Visibility.Collapsed};
+            headerPanel.Children.Add(updateNotice);
             Grid.SetRow(headerPanel, 0);
             root.Children.Add(headerPanel);
 
@@ -284,6 +303,7 @@ namespace TableTennisLauncher
             txtRoom = NetworkField(contentPanel, "Private room code (6 characters; empty = public)", 6);
 
             if (HasCommunityEngine) AddOnlineHelp(contentPanel);
+            AddUpdateHelp(contentPanel);
 
             // Section: Shortcuts Callout Card
             var callout = new Border
@@ -519,6 +539,8 @@ namespace TableTennisLauncher
             string python = Path.Combine(root, "tools", "python", "python.exe");
             if (!File.Exists(python)) python = Path.Combine(root, ".tools", "python314", "python.exe");
             string server = Path.Combine(root, "server", "ttlink_server.py");
+            if(File.Exists(Path.Combine(distDir,"python","python.exe"))) python=Path.Combine(distDir,"python","python.exe");
+            if(File.Exists(Path.Combine(distDir,"server","ttlink_server.py"))) server=Path.Combine(distDir,"server","ttlink_server.py");
             if (!File.Exists(python) || !File.Exists(server))
                 throw new InvalidOperationException("The bundled server tools are missing. Restore the complete installation or enter the other PC's server address.");
             foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners())
@@ -528,6 +550,10 @@ namespace TableTennisLauncher
             var process = Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port " + port) {
                 WorkingDirectory = root, UseShellExecute = true });
             if (process == null) throw new InvalidOperationException("Windows did not start the server.");
+            try {
+                Directory.CreateDirectory(Path.Combine(root,".updates"));
+                File.WriteAllLines(Path.Combine(root,".updates","server.pid"),new[]{process.Id.ToString(),process.StartTime.ToUniversalTime().Ticks.ToString(),Path.GetFullPath(python)});
+            } catch { }
             return process;
         }
 
@@ -572,6 +598,57 @@ namespace TableTennisLauncher
             } catch { return "unavailable"; }
         }
 
+        private void AddUpdateHelp(StackPanel parent) {
+            parent.Children.Add(CreateSectionTitle("UPDATES"));
+            chkAutoUpdates=new CheckBox {Content="Check for updates at startup",Foreground=Brushes.White,
+                IsChecked=true,Margin=new Thickness(0,3,0,6)};
+            parent.Children.Add(chkAutoUpdates);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal};
+            var check=new Button {Content="Check now",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,0)};
+            check.Click+=async (sender,args)=>await CheckUpdates(true);
+            var open=new Button {Content="Open updater",Padding=new Thickness(10,5,10,5)};
+            open.Click+=(sender,args)=>OpenUpdater();
+            actions.Children.Add(check);actions.Children.Add(open);parent.Children.Add(actions);
+            updateStatus=new TextBlock {Text="Updates are installed only after you approve them.",Foreground=Brushes.LightGray,
+                TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,6,0,10)};
+            parent.Children.Add(updateStatus);
+        }
+        private async Task CheckUpdates(bool force) {
+            if(checkingUpdates) return;
+            string updater=Path.Combine(distDir,"tabletennis_updater.exe");
+            if(!File.Exists(updater)) {updateStatus.Text="Install the full release once to enable update checks.";return;}
+            checkingUpdates=true;
+            updateStatus.Text="Checking for updates...";
+            try {
+                await Task.Run(()=>{
+                    using(var process=Process.Start(new ProcessStartInfo(updater,"--check-only"+(force?" --force":"")) {
+                        WorkingDirectory=distDir,UseShellExecute=false,CreateNoWindow=true})) {
+                        if(process==null) throw new IOException("Could not start the update check.");
+                        process.WaitForExit();
+                    }
+                });
+                string root=Path.GetDirectoryName(distDir.TrimEnd('\\'));
+                var fields=new Dictionary<string,string>();
+                foreach(string line in File.ReadAllLines(Path.Combine(root,".updates","status.txt"))) {
+                    int split=line.IndexOf('=');if(split>0) fields[line.Substring(0,split)]=line.Substring(split+1);
+                }
+                string message,state;
+                updateStatus.Text=fields.TryGetValue("message",out message)?message:"Update check completed.";
+                if(fields.TryGetValue("state",out state) && state=="available") {
+                    updateNotice.Text=updateStatus.Text+" Open UPDATES below or OPTIONS > PC SETTINGS > UPDATES.";
+                    updateNotice.Visibility=Visibility.Visible;
+                } else updateNotice.Visibility=Visibility.Collapsed;
+            } catch(Exception error) {updateStatus.Text="Update check unavailable. You can keep playing. "+error.Message;}
+            finally {checkingUpdates=false;}
+        }
+        private void OpenUpdater() {
+            SaveSettings();
+            string updater=Path.Combine(distDir,"tabletennis_updater.exe");
+            if(!File.Exists(updater)) {updateStatus.Text="Update support is missing. Install the current full release once.";return;}
+            try {Process.Start(new ProcessStartInfo(updater) {WorkingDirectory=distDir,UseShellExecute=false});}
+            catch(Exception error) {updateStatus.Text="Could not open updater: "+error.Message;}
+        }
+
         private void AddOnlineHelp(StackPanel parent) {
             var box = new StackPanel { Margin = new Thickness(0,6,0,12) };
             box.Children.Add(new TextBlock {
@@ -590,6 +667,8 @@ namespace TableTennisLauncher
             string python = Path.Combine(root, "tools", "python", "python.exe");
             if (!File.Exists(python)) python = Path.Combine(root, ".tools", "python314", "python.exe");
             string server = Path.Combine(root, "server", "ttlink_server.py");
+            if(File.Exists(Path.Combine(distDir,"python","python.exe"))) python=Path.Combine(distDir,"python","python.exe");
+            if(File.Exists(Path.Combine(distDir,"server","ttlink_server.py"))) server=Path.Combine(distDir,"server","ttlink_server.py");
             bool bundled = File.Exists(python) && File.Exists(server);
             string address = LocalServerAddress();
             var actions = new StackPanel { Orientation = Orientation.Horizontal };
@@ -663,7 +742,7 @@ namespace TableTennisLauncher
         private void LoadSettings()
         {
             string buttons = "auto", server = "", player = "Player", room = "";
-            bool network = false;
+            bool network = false, checkUpdates = true;
             string iso = "";
             string res = "1080p";
             int framerate = 60;
@@ -682,7 +761,8 @@ namespace TableTennisLauncher
                         if (parts.Length != 2) continue;
                         string key = parts[0].Trim();
                         string val = parts[1].Trim();
-                        if (key == "button_prompts") buttons = val;
+                        if (key == "check_updates") bool.TryParse(val,out checkUpdates);
+                        else if (key == "button_prompts") buttons = val;
                         else if (key == "online_server") server = val;
                         else if (key == "player_name") player = val;
                         else if (key == "room_code") room = val;
@@ -745,6 +825,7 @@ namespace TableTennisLauncher
             chkNetwork.IsChecked = HasCommunityEngine && network;
             chkFullscreen.IsChecked = fullscreen;
             chkShowFps.IsChecked = showFps;
+            chkAutoUpdates.IsChecked=checkUpdates;
 
             if (aa == "none") comboAA.SelectedIndex = 0;
             else if (aa == "fxaa_extreme") comboAA.SelectedIndex = 2;
@@ -797,7 +878,8 @@ namespace TableTennisLauncher
                     "button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto"),
                     "system_link=" + (HasCommunityEngine && chkNetwork.IsChecked == true).ToString().ToLower(),
                     "online_server=" + txtServer.Text.Trim(), "player_name=" + txtPlayer.Text.Trim(),
-                    "room_code=" + txtRoom.Text.Trim().ToUpperInvariant()
+                    "room_code=" + txtRoom.Text.Trim().ToUpperInvariant(),
+                    "check_updates=" + (chkAutoUpdates.IsChecked==true).ToString().ToLowerInvariant()
                 });
                 var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var line in lines) keys.Add(line.Split('=')[0]);
@@ -821,6 +903,10 @@ namespace TableTennisLauncher
 
         private async Task LaunchGameChecked()
         {
+            string root=Path.GetDirectoryName(distDir.TrimEnd('\\'));
+            if(File.Exists(Path.Combine(root,".updates","in-progress"))) {
+                updateStatus.Text="An update is in progress. Finish it or reopen the launcher to recover.";return;
+            }
             string selectedIso = txtIsoPath.Text.Trim();
             if (string.IsNullOrEmpty(selectedIso) || !File.Exists(selectedIso))
             {

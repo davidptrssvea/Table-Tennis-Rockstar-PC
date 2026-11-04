@@ -226,5 +226,42 @@ class NativeScreenTests(unittest.TestCase):
             subprocess.run([str(executable)], check=True, timeout=10)
 
 
+class MatchedEngineDownloadTests(unittest.TestCase):
+    def test_default_engine_uses_pinned_release_and_flat_archive(self):
+        import io, json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'project').mkdir()
+            payload = io.BytesIO()
+            with zipfile.ZipFile(payload, 'w') as package:
+                package.writestr('bin/rexglue.exe', b'fixture')
+                package.writestr('lib/cmake/rexglue/', b'')
+            data = payload.getvalue()
+            checksum = hashlib.sha256(data).hexdigest()
+            (root / 'project/engine.json').write_text(json.dumps(dict(url='https://example.invalid/pinned.zip', sha256=checksum, size=len(data))))
+            with mock.patch.object(setup_build, 'ROOT', root), \
+                 mock.patch.object(setup_build.urllib.request, 'urlopen', return_value=io.BytesIO(data)) as fetch, \
+                 mock.patch.object(setup_build.subprocess, 'check_output', return_value='0.10.0'):
+                sdk = setup_build.find_sdk(None, False)
+                self.assertEqual(sdk, root / '.tools' / ('engine-' + checksum[:12]))
+                self.assertEqual(fetch.call_args.args[0].full_url, 'https://example.invalid/pinned.zip')
+                self.assertEqual(setup_build.find_sdk(None, True), sdk)
+                self.assertEqual(fetch.call_count, 1)
+
+    def test_corrupt_engine_download_never_runs_or_extracts(self):
+        import io, json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'project').mkdir()
+            (root / 'project/engine.json').write_text(json.dumps(dict(url='https://example.invalid/pinned.zip', sha256='0'*64, size=4)))
+            with mock.patch.object(setup_build, 'ROOT', root), \
+                 mock.patch.object(setup_build.urllib.request, 'urlopen', return_value=io.BytesIO(b'wrong')), \
+                 mock.patch.object(setup_build.subprocess, 'check_output') as execute:
+                with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+                    setup_build.find_sdk(None, False)
+                execute.assert_not_called()
+                self.assertFalse(any(root.rglob('rexglue.exe')))
+
+
 if __name__ == '__main__':
     unittest.main()
