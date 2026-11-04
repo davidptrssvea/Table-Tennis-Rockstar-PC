@@ -2,6 +2,13 @@
 
 ## Unreleased - community Windows integration
 
+- Complete PlayStation replacements for 17 additional button/guide images
+  (23 verified variants total): startup/dialogs, pause shoulders, HUD triggers,
+  training controls and guide indicator. Restore each exact original in Xbox
+  mode even when several variants share one PS image. Check tiled texture bounds.
+- Update AUTO prompts during intro/startup and on trigger input; serialize
+  controller polling. Draw controller symbols in the PC SETTINGS footer.
+
 - Add OPTIONS > PC SETTINGS to the main and pause menus. Fullscreen, timing
   window, button icons and achievement sound apply immediately; resolution,
   anti-aliasing and output filter are clearly marked as requiring a restart.

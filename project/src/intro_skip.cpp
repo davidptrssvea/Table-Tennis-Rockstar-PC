@@ -206,8 +206,8 @@ bool AdvanceFrontendMovie(PPCContext& ctx, uint8_t* base) {
 
 void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) {
   if (user >= 4 || !state || ctx.r3.u32 != 0) return;
+  if (user==0) tabletennis::prompts::Update();
   if (MainMenuReached()) {
-    if (user==0) tabletennis::prompts::Update();
     achievement_ui::PadSample pad{
       REX_LOAD_U16(state+4),REX_LOAD_U8(state+6),REX_LOAD_U8(state+7),
       int16_t(REX_LOAD_U16(state+8)),int16_t(REX_LOAD_U16(state+10)),

@@ -1,3 +1,6 @@
+#include "button_texture_layout.h"
+#include <array>
+#include <set>
 #include "settings_store.h"
 #include "screen_layout.h"
 #include <cassert>
@@ -35,5 +38,32 @@ int main() {
     assert(values.at("future_key")=="keep");
     assert(merged.find("# keep comment\r\n")!=std::string::npos);
     assert(Merge(merged,{{"show_fps","false"},{"achievement_sound","false"}})==merged);
+  }
+  {
+    using namespace tabletennis::prompts::texture;
+    constexpr uint64_t psCircle=777;
+    const std::array<Signature,3> icons{{
+      {64,64,0x7C7306ACF85A7575ULL,psCircle},
+      {64,64,0xACBB72E1AFDE2EDCULL,psCircle},
+      {128,64,0x164C3B7D492B2A4CULL,888}}};
+    // The dialog's B is a separate image. A PS re-upload must keep that
+    // identity so Xbox mode restores the exact dialog artwork, not menu B.
+    assert(Identify(icons,64,64,0xACBB72E1AFDE2EDCULL)==1);
+    assert(Identify(icons,64,64,psCircle,1)==1);
+    assert(Identify(icons,64,64,psCircle)==-1);
+    assert(Identify(icons,64,64,0x7C7306ACF85A7575ULL,1)==0);
+    assert(Identify(icons,64,32,0xACBB72E1AFDE2EDCULL)==-1);
+    assert(Identify(icons,128,64,0x164C3B7D492B2A4CULL)==2);
+    for(auto shape:{std::pair{64u,32u},std::pair{64u,64u},std::pair{128u,64u},std::pair{128u,128u}}) {
+      uint32_t maximum=0;std::set<uint32_t> offsets;
+      for(uint32_t y=0;y<shape.second/4;++y) for(uint32_t x=0;x<shape.first/4;++x) {
+        auto at=BlockOffset(x,y,shape.first/4);assert(at%16==0);offsets.insert(at);
+        if(at>maximum) maximum=at;
+      }
+      assert(offsets.size()==size_t(shape.first/4)*(shape.second/4));
+      assert(Fits(shape.first/4,shape.first,shape.second,maximum+16));
+      assert(!Fits(shape.first/4,shape.first,shape.second,maximum+15));
+      assert(!Fits(shape.first/4-1,shape.first,shape.second,maximum+16));
+    }
   }
 }

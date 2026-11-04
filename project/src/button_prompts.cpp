@@ -1,6 +1,7 @@
 // button_prompts.cpp - see button_prompts.h.
 
 #include "button_prompts.h"
+#include "button_texture_layout.h"
 
 #include <rex/cvar.h>
 #include <rex/system/interfaces/graphics.h>
@@ -41,13 +42,31 @@ struct Icon {
   std::vector<uint8_t> xbox;   // captured the first time the icon is seen
 };
 
-std::array<Icon, 6> g_icons = {{
+std::array<Icon, 23> g_icons = {{
     {"A", 64, 64, kXboxAHash, kPlayStationA},
     {"B", 64, 64, kXboxBHash, kPlayStationB},
     {"X", 64, 64, kXboxXHash, kPlayStationX},
     {"Y", 64, 64, kXboxYHash, kPlayStationY},
     {"LB", 64, 32, kXboxLBHash, kPlayStationLB},
     {"RB", 64, 32, kXboxRBHash, kPlayStationRB},
+    // Additional menu/HUD/training variants: hashes only, never original pixels.
+    {"A (boot)", 64, 64, 0x408C83A34157E1D6ULL, kPlayStationA},
+    {"B (dialogs)", 64, 64, 0xACBB72E1AFDE2EDCULL, kPlayStationB},
+    {"LB (pause)", 64, 32, 0x87068736A7DAF86AULL, kPlayStationLB},
+    {"RB (pause)", 64, 32, 0xDDECCC6B7C599500ULL, kPlayStationRB},
+    {"RT (HUD)", 64, 64, 0x548845E0E78B7998ULL, kPlayStationRT},
+    {"A (training glow)", 64, 64, 0x0209AA12C210BCAEULL, kPlayStationA},
+    {"Y (training glow)", 64, 64, 0x631E0245FFAF4414ULL, kPlayStationY},
+    {"X (training glow)", 64, 64, 0x720D13F4C8EB70FEULL, kPlayStationX},
+    {"B (training glow)", 64, 64, 0xDAC1169020410FA2ULL, kPlayStationB},
+    {"LB (training)", 128, 64, 0x164C3B7D492B2A4CULL, kPlayStationLBLarge},
+    {"RB (training)", 128, 64, 0x57564441E1FC064FULL, kPlayStationRBLarge},
+    {"LT (training)", 64, 64, 0x1AB2D230E00A8366ULL, kPlayStationLT},
+    {"RT (training)", 64, 64, 0xEBF606C61B2210C0ULL, kPlayStationRT},
+    {"X (training)", 64, 64, 0xB84A3D6ED8F13FBCULL, kPlayStationX},
+    {"Y (training)", 64, 64, 0x999C4A9DA510B538ULL, kPlayStationY},
+    {"A (training)", 64, 64, 0x9825952A3689CA4FULL, kPlayStationA},
+    {"Guide", 128, 128, 0x8D53A9E805FC317CULL, kPlayStationGuide},
 }};
 
 // An icon copy in guest memory (one per menu movie that has it).
@@ -63,20 +82,14 @@ std::mutex g_mutex;                            // g_icons[].xbox, g_placements, 
 std::map<uint32_t, Placement> g_placements;    // by guest address
 bool g_applied = false;                        // PlayStation icons in guest memory
 std::atomic<bool> g_want_playstation{false};
-int g_setting = 0;                             // UI thread: 0 auto, 1 xbox, 2 playstation
+std::atomic<int> g_setting{0};                             // UI thread: 0 auto, 1 xbox, 2 playstation
+std::mutex g_follow_mutex;
+std::array<texture::Signature,23> g_signatures{};
 bool g_pad_playstation = false;                // UI thread: controller used last
 
 // Byte offset of 16-byte block x,y in a tiled Xenos texture with rows of `pitch_blocks` blocks
 // (XGAddress2DTiledOffset, as the SDK's texture_util::GetTiledOffset2D, which is not exported).
-uint32_t BlockOffset(uint32_t x, uint32_t y, uint32_t pitch_blocks) {
-  constexpr uint32_t kLog2Bytes = 4;
-  const uint32_t pitch = (pitch_blocks + 31) & ~31u;
-  const uint32_t macro = ((x >> 5) + (y >> 5) * (pitch >> 5)) << (kLog2Bytes + 7);
-  const uint32_t micro = ((x & 7) + ((y & 0xE) << 2)) << kLog2Bytes;
-  const uint32_t offset = macro + ((micro & ~0xFu) << 1) + (micro & 0xF) + ((y & 1) << 4);
-  return ((offset & ~0x1FFu) << 3) + ((y & 16) << 7) + ((offset & 0x1C0) << 2) +
-         (((((y & 8) >> 2) + (x >> 3)) & 3) << 6) + (offset & 0x3F);
-}
+using texture::BlockOffset;
 
 // FNV-1a 64 of the icon's used blocks in row-major order (as make_button_art.py computes it).
 uint64_t Fingerprint(const uint8_t* data, uint32_t pitch_blocks, uint32_t width, uint32_t height) {
@@ -156,38 +169,37 @@ void Invalidate(uint32_t physical_address, uint32_t size) {
 // SDK patch 0017: called on the GPU command thread before a texture's base level is uploaded.
 #if defined(TT_TEXTURE_LOAD_HOOK)
 void OnTextureLoad(const rex::system::TextureLoadHookInfo& info) {
-  if (info.format != kFormatDxt5 || !info.tiled || info.width != 64 || (info.height != 64 && info.height != 32)) {
-    return;
+  if(info.format!=kFormatDxt5 || !info.tiled ||
+     (info.width!=64 && info.width!=128) || (info.height!=64 && info.height!=32 && info.height!=128)) return;
+  const uint32_t pitch_blocks=info.pitch_texels/4;
+  if(!texture::Fits(pitch_blocks,info.width,info.height,info.size)) return;
+  uint8_t* data=g_memory->TranslatePhysical<uint8_t*>(info.guest_address);
+  bool written=false;
+  {
+    std::lock_guard lock(g_mutex);
+    const uint64_t hash=Fingerprint(data,pitch_blocks,info.width,info.height);
+    auto previous=g_placements.find(info.guest_address);
+    int known=previous==g_placements.end() ? -1 : previous->second.icon;
+    int i=texture::Identify(g_signatures,info.width,info.height,hash,known);
+    if(i<0) return;
+    const Placement placement{data,info.size,pitch_blocks,i};
+    const bool first=previous==g_placements.end() || previous->second.icon!=i;
+    g_placements[info.guest_address]=placement;
+    written=Bring(placement,g_applied)==Brought::kWritten;
+    if(first) REXLOG_INFO("Tabletennis: button icon {} at {:08X} ({})",g_icons[i].name,
+                         info.guest_address,g_applied ? "PlayStation" : "Xbox");
   }
-  uint8_t* data = g_memory->TranslatePhysical<uint8_t*>(info.guest_address);
-  const uint32_t pitch_blocks = info.pitch_texels / 4;
-  const uint64_t hash = Fingerprint(data, pitch_blocks, info.width, info.height);
-  for (int i = 0; i < int(g_icons.size()); ++i) {
-    const Icon& icon = g_icons[i];
-    if (icon.height != info.height || (hash != icon.xbox_hash && hash != icon.playstation_hash)) continue;
-    bool written = false;
-    {
-      std::lock_guard lock(g_mutex);
-      const Placement p{data, info.size, pitch_blocks, i};
-      const bool first = g_placements.emplace(info.guest_address, p).second;
-      g_placements[info.guest_address] = p;
-      written = Bring(p, g_applied) == Brought::kWritten;
-      if (first) {
-        REXLOG_INFO("Tabletennis: button icon {} at {:08X} ({})", icon.name, info.guest_address,
-                    g_applied ? "PlayStation" : "Xbox");
-      }
-    }
-    if (written) Invalidate(info.guest_address, info.size);
-    return;
-  }
+  if(written) Invalidate(info.guest_address,info.size);
 }
 
 #endif
 
-void Apply(bool playstation) {
+void Apply() {
   std::vector<std::pair<uint32_t, uint32_t>> written;
+  bool playstation;
   {
     std::lock_guard lock(g_mutex);
+    playstation=g_want_playstation.load();
     if (playstation == g_applied) return;
     g_applied = playstation;
     for (auto it = g_placements.begin(); it != g_placements.end();) {
@@ -231,7 +243,7 @@ void FollowController() {
     for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT && !used; ++b) {
       used = SDL_GetGamepadButton(pad, SDL_GamepadButton(b));
     }
-    for (int a = SDL_GAMEPAD_AXIS_LEFTX; a <= SDL_GAMEPAD_AXIS_RIGHTY && !used; ++a) {
+    for (int a = SDL_GAMEPAD_AXIS_LEFTX; a < SDL_GAMEPAD_AXIS_COUNT && !used; ++a) {
       used = std::abs(int(SDL_GetGamepadAxis(pad, SDL_GamepadAxis(a)))) > 16000;
     }
     if (used || (!any_used && i == 0)) {
@@ -278,6 +290,10 @@ void Init(rex::memory::Memory* memory, rex::system::IGraphicsSystem* graphics) {
   for (Icon& icon : g_icons) {
     icon.playstation_hash = LinearFingerprint(icon.playstation, size_t(icon.width / 4) * (icon.height / 4) * kBlockBytes);
   }
+  for(size_t i=0;i<g_icons.size();++i) {
+    const auto& icon=g_icons[i];
+    g_signatures[i]={icon.width,icon.height,icon.xbox_hash,icon.playstation_hash};
+  }
   SetSetting(REXCVAR_GET(button_prompts));
 #if defined(TT_TEXTURE_LOAD_HOOK)
   if (g_memory && graphics) graphics->SetTextureLoadHook(OnTextureLoad);
@@ -290,10 +306,15 @@ void SetSetting(const std::string& value) {
 }
 
 void Update() {
-  if (g_setting == 0) FollowController();
-  const bool want = g_setting == 2 || (g_setting == 0 && g_pad_playstation);
-  g_want_playstation.store(want);
-  Apply(want);
+  {
+    std::lock_guard follow_lock(g_follow_mutex);
+    const auto setting=g_setting.load();
+    if (setting == 0) FollowController();
+    g_want_playstation.store(setting == 2 || (setting == 0 && g_pad_playstation));
+  }
+  // Apply/invalidation may acquire the engine's global memory-watch lock.
+  // Never hold the controller lock across that operation on a guest/UI thread.
+  Apply();
 }
 
 bool PlayStation() { return g_want_playstation.load(); }

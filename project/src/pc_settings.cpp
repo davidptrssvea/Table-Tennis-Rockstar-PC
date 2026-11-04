@@ -225,7 +225,18 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   text(18*s,x+28*s,y+449*s,IM_COL32(190,190,190,255),"* AFTER RESTART     |     FRAME PACING: 60 FPS",false);
   dl->PopClipRect();
   dl->AddRectFilled({x,y+495*s},{r,y+543*s},IM_COL32(205,208,210,255));
-  text(22*s,x+28*s,y+505*s,IM_COL32(20,22,25,255),"D-PAD: SELECT / CHANGE    A: CHANGE    B: SAVE & BACK");
+  const auto ink=IM_COL32(20,22,25,255);
+  text(21*s,x+24*s,y+505*s,ink,"D-PAD: SELECT / CHANGE");
+  auto action=[&](float xx,const char* letter,const char* label,ImU32 color) {
+    ImVec2 center{xx,y+519*s};
+    if(!prompts::DrawFace(dl,center,13*s,letter,1.f)) {
+      dl->AddCircleFilled(center,13*s,color);
+      text(20*s,xx-7*s,y+505*s,ink,letter);
+    }
+    text(21*s,xx+21*s,y+505*s,ink,label);
+  };
+  action(x+415*s,"A","CHANGE",IM_COL32(90,186,40,255));
+  action(x+640*s,"B","SAVE & BACK",IM_COL32(210,44,44,255));
   if(!state_->error.empty()) text(16*s,x+12*s,y+552*s,IM_COL32(255,130,110,255),state_->error.c_str(),false);
 }
 }

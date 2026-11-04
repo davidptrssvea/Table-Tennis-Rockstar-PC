@@ -61,6 +61,7 @@ class StartupDialog : public rex::ui::ImGuiDialog {
  protected:
   void OnDraw(ImGuiIO& io) override {
     tabletennis::intro::PollGamepads();
+    tabletennis::prompts::Update();
     if (tabletennis::intro::ShowTransition()) {
       const auto* viewport = ImGui::GetMainViewport();
       auto* draw = ImGui::GetForegroundDrawList();

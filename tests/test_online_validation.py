@@ -2,6 +2,7 @@
 import importlib.util
 import os
 import socket
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -203,3 +204,33 @@ class Probe {
                 finally:
                     process.terminate()
                     process.wait(timeout=5)
+
+
+@unittest.skipUnless(sys.platform == 'win32' and os.environ.get('TABLETENNIS_TEST_COMMUNITY_SDK'),
+                     'Opt-in matched Windows SDK required')
+class ButtonPromptTests(unittest.TestCase):
+    def test_auto_detection_with_virtual_playstation_and_xbox(self):
+        sys.path.insert(0, str(ROOT / 'project/tools'))
+        import setup_build
+        sdk = Path(os.environ['TABLETENNIS_TEST_COMMUNITY_SDK']).resolve(strict=True)
+        self.assertTrue((sdk / '.tabletennis-community-sdk').is_file())
+        with tempfile.TemporaryDirectory(prefix='Table Tennis prompt check ') as directory:
+            folder = Path(directory)
+            source = (ROOT / 'tests/button_prompts_probe.cpp').as_posix()
+            (folder / 'CMakeLists.txt').write_text(
+                'cmake_minimum_required(VERSION 3.25)\nproject(prompt_probe LANGUAGES CXX)\n'
+                'set(CMAKE_CXX_STANDARD 23)\nfind_package(rexglue 0.10.0 REQUIRED CONFIG)\n'
+                f'add_executable(prompt_probe "{source}")\n'
+                'target_link_libraries(prompt_probe PRIVATE rex::runtime)\n')
+            cmake, ninja, clang, _, env = setup_build.build_tools()
+            subprocess.run([str(cmake), '-S', str(folder), '-B', str(folder / 'build'),
+                            '-G', 'Ninja', f'-DCMAKE_MAKE_PROGRAM={ninja}',
+                            f'-DCMAKE_CXX_COMPILER={clang}', f'-DCMAKE_PREFIX_PATH={sdk}',
+                            '-DCMAKE_BUILD_TYPE=Release'], env=env, check=True,
+                           stdout=subprocess.DEVNULL)
+            subprocess.run([str(cmake), '--build', str(folder / 'build')], env=env,
+                           check=True, stdout=subprocess.DEVNULL)
+            for name in ('rexruntime.dll', 'TracyClient.dll'):
+                shutil.copy2(sdk / 'bin' / name, folder / 'build' / name)
+            subprocess.run([str(folder / 'build/prompt_probe.exe')], check=True,
+                           timeout=10, stdout=subprocess.DEVNULL)

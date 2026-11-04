@@ -47,7 +47,10 @@ retain ReXGlue's BSD license. These features are not in the v1.1.2 download abov
 - **Button prompts:** Auto, Xbox and PlayStation choices in the launcher. Auto
   detects SDL PlayStation controllers. Replacing the game's texture icons needs
   the matched community SDK below; stock SDK builds apply this choice to the
-  achievement overlay only. Some separate/vector icons retain their Xbox art.
+  achievement overlay only. Matched builds recognize 23 verified menu/HUD/training
+  image variants, including startup/dialog buttons, L1/R1, L2/R2 and the guide
+  indicator. AUTO is updated during startup and follows trigger use too; custom
+  PC SETTINGS/achievement footers draw the selected controller's symbols.
 - **Experimental ONLINE / SYSTEM LINK:** optional matched-SDK builds expose these
   menu entries and launcher fields for server address, player name and private
   room code. Networking is disabled by default; no public server is supplied or

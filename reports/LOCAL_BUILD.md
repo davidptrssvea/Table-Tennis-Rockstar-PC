@@ -491,3 +491,55 @@ private update directory were refreshed (EXE, launcher, frontend/pause archive,
 credit notice). Existing settings were preserved and prior files backed up.
 The normal desktop shortcut's stable dist, the private ZIP and public release
 remain unchanged. No game/archive/generated function is added to public source.
+
+
+## PlayStation prompt completion - 2026-11-04 (unreleased)
+
+The original six texture fingerprints missed separate dialog/HUD/pause/training
+art. A local inventory of verified retail flash.rpf textures identified 17 more
+button/guide variants: 23 supported images in total. The additions include the
+flat startup A, the separate dialog B, pause shoulders, training glow/regular
+faces, larger bumpers, LT/RT and the round guide indicator. Known fingerprints
+and dimensions are stored; no original game pixels are in public source.
+The training-load texture record that needed a second pointer match was checked
+separately and was a known non-button image, not another missed prompt.
+
+Added authored larger L1/R1, L2/R2 and PS guide art. The generator uses the existing
+MIT PlayStation art plus authored vector paths and produces the committed DXT5
+arrays; Pillow is needed only for developer regeneration. Regeneration was checked
+to be byte-identical. The decoded PlayStation artwork was inspected locally.
+
+Texture matching retains a placement's original variant when a shared PS image
+is uploaded again. This prevents switching back to Xbox from restoring the wrong
+version of B/A/etc. Unknown PS images are not guessed as an original variant;
+reused memory is rejected. Tiled block bounds are checked before reading/writing.
+CPU hashing and mutation share the texture mutex. Controller polling is serialized
+but its lock is released before memory-watch invalidation, preserving lock order.
+
+AUTO updates during startup and successful pre-menu input polls, not only after
+MainMenuReached. Trigger use now counts as controller activity. PC SETTINGS draws
+actual cross/circle or Xbox A/B footer symbols instead of fixed A/B text.
+
+Validation:
+- Production Windows build completed; all 57 registrations/23 native edit hashes
+  passed. The production EXE contains no private TT_TEST_CONTROLLER_FILE hook.
+- The 13 local/native/runtime checks passed, including production ISO boot from
+  command line/settings and native alias-identity/tiled-boundary assertions.
+- Seven launcher/protocol/controller tests passed. SDL virtual DualSense and
+  Xbox devices exercise AUTO switching by buttons and trigger-only input, plus
+  forced modes. Concurrent guest/UI setting changes converge to the last mode.
+  SDL test devices and driver hints exist only inside the test process.
+- A private fixture probe compiled the production button_prompts.cpp with asserts
+  enabled even in Release. All 23 original image variants from the user's disc
+  were replaced, matched against authored PS block hashes, restored byte-for-byte
+  to their own Xbox image, and rejected after simulated memory reuse. Fixtures and
+  extracted review images remain local and are excluded from public source.
+- The final production EXE passed the three runtime boot subcases again. This is
+  not a claim that every game screen was manually visited or that a physical
+  DualSense was tested; physical-controller visual review remains separate.
+
+Installed into the local experimental installation and the existing uncompressed
+update folder, with prior EXE backed up and settings retained. Normal desktop
+shortcut/stable dist, private ZIP and published release are unchanged.
+Online build ID: 561A3B54BF1E.
+EXE SHA-256: 30cd67c3b9c08dac068c9cc54bb1426e74c80da344889bb512df31243828a860.
