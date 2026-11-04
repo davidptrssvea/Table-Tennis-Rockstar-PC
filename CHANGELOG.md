@@ -2,6 +2,9 @@
 
 ## Unreleased - community Windows integration
 
+- Reserve a 30-DIP gutter between launcher controls and its scrollbar; scale
+  the spacing with Windows DPI and constrain content to the viewport width.
+
 - Use square corners in PC SETTINGS and PHOTO MODE, matching the original
   menus. Vertically center action labels beside controller icons using rendered
   glyph bounds; retain all text sizes and compact panel dimensions.

@@ -1,5 +1,15 @@
 # Local build and source distribution
 
+## Launcher scrollbar spacing - 2026-11-04 (unreleased)
+
+Reserve 30 device-independent pixels on the content panel right edge, inside
+the scrolling viewport. Disable horizontal scrolling so fields and grids fit
+the remaining width. Built the WPF launcher and visually checked the ISO browse
+button, text fields and comboboxes: 30 physical pixels separate their right
+edge from the scrollbar at 100% DPI. Deployed to the experimental installation
+and uncompressed update. Existing open launcher must be restarted. No game
+binary, settings, private ISO ZIP or published release changed.
+
 ## Menu corners and button-label alignment - 2026-11-04 (unreleased)
 
 Use square corners throughout PC SETTINGS and PHOTO MODE panel rectangles.

@@ -107,7 +107,8 @@ namespace TableTennisLauncher
             root.Children.Add(headerPanel);
 
             // --- CONTENT ---
-            var contentPanel = new StackPanel();
+            // Reserve a DPI-scaled gutter inside the viewport, before the scrollbar.
+            var contentPanel = new StackPanel { Margin = new Thickness(0, 0, 30, 0) };
 
             // Section: Game Image (Xbox 360 ISO)
             contentPanel.Children.Add(CreateSectionTitle("GAME DISC IMAGE (XBOX 360 ISO)"));
@@ -350,7 +351,9 @@ namespace TableTennisLauncher
             };
             contentPanel.Children.Add(txtStatus);
 
-            var scroll = new ScrollViewer { Content = contentPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            var scroll = new ScrollViewer { Content = contentPanel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
             Grid.SetRow(scroll, 1);
             root.Children.Add(scroll);
 
