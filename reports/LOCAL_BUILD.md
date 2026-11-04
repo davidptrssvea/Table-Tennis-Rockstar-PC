@@ -1,5 +1,25 @@
 # Local build and source distribution
 
+## Photo help panel and button artwork - 2026-11-04 (unreleased)
+
+Replaced the loose Photo mode instructions with a rounded dark panel, two
+aligned control columns, zoom badge, separated action row and keyboard hints.
+Layout scales to the surface and keeps consistent margins/padding. Notices have
+their own wrapped toast; hiding help still hides the entire instruction panel.
+Xbox lettering now uses centered antialiased vector paths, avoiding the mismatch
+between dynamic glyph metrics and the fixed atlas used by the renderer. Shared
+PC SETTINGS/achievement overlay buttons receive the fix too. PlayStation caps
+use smoother circles and a subtle rim highlight.
+
+Built and visually checked an isolated UI preview in Xbox mode at 1280x720 and
+PlayStation mode at high DPI / 2560x1440 logical window size. Both icon sets,
+column spacing, text bounds and hide-help behavior were checked. All seven
+existing launcher/controller prompt checks passed, including virtual Xbox/PS
+auto-detection. Clean production was rebuilt after restoring the preview-only
+activation; no preview or private pad hook is present in the deployed executable.
+Experimental build ID is `C299117639C5`; both multiplayer PCs need matching files.
+Stable root dist, desktop shortcut, private ISO ZIP and GitHub remain unchanged.
+
 ## Photo mode zoom - 2026-11-04 (unreleased)
 
 Added optical magnification from 0.5x to 5x, controlled by D-pad up/down,

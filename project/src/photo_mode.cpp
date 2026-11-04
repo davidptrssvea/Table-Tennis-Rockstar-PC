@@ -331,42 +331,59 @@ void Overlay::OnDraw(ImGuiIO& io) {
   }
   if(active && !io.AppFocusLost) g_zoom_steps.fetch_add(io.MouseWheel);
   ImDrawList* dl = ImGui::GetForegroundDrawList();
-  const float s = io.DisplaySize.y / 720.0f;
-  const float x0 = 28.0f * s;
-  float y = io.DisplaySize.y - 30.0f * s;
-  ImFont* body = achievement_ui::BodyFont();
-  const float body_px = 18.0f * s;
-  auto line = [&](const std::string& text, ImU32 col) {
-    y -= body_px * 1.35f;
-    dl->AddText(body, body_px, ImVec2(x0 + 1.5f * s, y + 1.5f * s), IM_COL32(0, 0, 0, 200),
-                text.c_str());
-    dl->AddText(body, body_px, ImVec2(x0, y), col, text.c_str());
+  const float s=std::min(io.DisplaySize.y/720.f,io.DisplaySize.x/820.f);
+  const float width=760*s, height=318*s, margin=24*s;
+  const bool help=active && g_help.load();
+  const ImVec2 origin{margin,io.DisplaySize.y-margin-(help?height:0)};
+  ImFont* body=achievement_ui::BodyFont();
+  const ImU32 text=IM_COL32(236,240,246,255),muted=IM_COL32(156,167,185,255);
+  const ImU32 gold=IM_COL32(255,210,36,255),rule=IM_COL32(255,255,255,24);
+  auto at=[&](float x,float y) {return ImVec2(origin.x+x*s,origin.y+y*s);};
+  auto label=[&](float x,float y,const char* value,float size,ImU32 color) {
+    dl->AddText(body,size*s,at(x,y),color,value);
   };
-  if (!notice.empty()) line(notice, IM_COL32(255, 204, 0, 255));
-  if (active && g_help.load()) {
-    const ImU32 col = IM_COL32(235, 237, 240, 255);
-    line("Keyboard: WASD move, Q/E height, mouse drag look",col);
-    char zoom[96];
-    std::snprintf(zoom,sizeof(zoom),"Zoom %.2fx: D-pad up/down, mouse wheel or Page Up/Down",g_zoom.load());
-    line(zoom,col);
-    line("Enter save, R reset, Space hide help, F9/Esc leave",col);
-    y-=body_px*1.35f;
+  if(help) {
+    dl->AddRectFilled(at(0,5),at(760,323),IM_COL32(0,0,0,70),12*s);
+    dl->AddRectFilled(at(0,0),at(760,318),IM_COL32(13,18,27,242),12*s);
+    dl->AddRect(at(0,0),at(760,318),IM_COL32(135,155,182,65),12*s,0,1*s);
+    dl->AddRectFilled(at(20,19),at(24,47),gold,2*s);
+    dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(36,17),gold,"PHOTO MODE");
+    label(231,25,"FREE CAMERA",11,muted);
+    dl->AddRectFilled(at(624,17),at(740,49),IM_COL32(255,210,36,19),7*s);
+    char zoom[32];std::snprintf(zoom,sizeof(zoom),"ZOOM  %.2fx",g_zoom.load());
+    label(638,25,zoom,14,gold);
+    dl->AddLine(at(20,65),at(740,65),rule,1*s);
+    label(22,79,"CONTROLLER",11,gold);
+    label(402,79,"KEYBOARD & MOUSE",11,gold);
+    dl->AddLine(at(380,80),at(380,228),rule,1*s);
+    const char* actions[]={"Move","Look","Height","Zoom","Speed"};
+    const char* pad[]={"Left stick","Right stick",prompts::PlayStation()?"L2 / R2":"LT / RT","D-pad up / down",prompts::PlayStation()?"L1 slow / R1 fast":"LB slow / RB fast"};
+    const char* keyboard[]={"W A S D / arrows","Mouse drag","Q / E","Wheel / Page Up / Down","Shift fast / Ctrl slow"};
+    for(int row=0;row<5;row++) {
+      const float y=103+25*row;
+      label(22,y,actions[row],14,muted);label(102,y,pad[row],15,text);
+      label(402,y,actions[row],14,muted);label(482,y,keyboard[row],15,text);
+    }
+    dl->AddLine(at(20,242),at(740,242),rule,1*s);
     const char* letters[]={"A","B","X","Y"};
     const char* labels[]={"HIDE HELP","LEAVE","SAVE PICTURE","RESET VIEW"};
+    const char* keys[]={"SPACE","F9 / ESC","ENTER","R"};
     const unsigned colors[]={IM_COL32(79,185,24,255),IM_COL32(215,42,42,255),IM_COL32(42,100,225,255),IM_COL32(235,190,24,255)};
     for(int i=0;i<4;i++) {
-      const float xx=x0+i*190*s;
-      prompts::DrawButton(dl,{xx+11*s,y+10*s},11*s,colors[i],letters[i],achievement_ui::HeadlineFont(20*s),1);
-      dl->AddText(body,body_px,{xx+28*s,y},col,labels[i]);
+      const float x=22+184*i;
+      prompts::DrawButton(dl,at(x+16,270),16*s,colors[i],letters[i],nullptr,1);
+      label(x+42,257,labels[i],13,text);label(x+42,278,keys[i],11,muted);
     }
-    line(prompts::PlayStation()?"L2 / R2 height    L1 slow, R1 fast":"LT / RT height    LB slow, RB fast", col);
-    line("Left stick move    Right stick look    Both sticks leave", col);
-    const float title_px = 30.0f * s;
-    ImFont* title = achievement_ui::HeadlineFont(title_px);
-    y -= title_px * 1.25f;
-    dl->AddText(title, title_px, ImVec2(x0 + 2.0f * s, y + 2.0f * s), IM_COL32(0, 0, 0, 220),
-                "PHOTO MODE");
-    dl->AddText(title, title_px, ImVec2(x0, y), IM_COL32(255, 204, 0, 255), "PHOTO MODE");
+    label(22,301,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);
+  }
+  if(!notice.empty()) {
+    const float wrap=width-32*s;
+    const auto size=body->CalcTextSizeA(14*s,1e6f,wrap,notice.c_str());
+    const float toast_height=size.y+24*s;
+    const ImVec2 p{origin.x,origin.y-toast_height-(help?10*s:0)};
+    dl->AddRectFilled(p,{p.x+width,p.y+toast_height},IM_COL32(13,18,27,242),8*s);
+    dl->AddRect(p,{p.x+width,p.y+toast_height},IM_COL32(255,210,36,70),8*s,0,1*s);
+    dl->AddText(body,14*s,{p.x+16*s,p.y+12*s},gold,notice.c_str(),nullptr,wrap);
   }
 }
 

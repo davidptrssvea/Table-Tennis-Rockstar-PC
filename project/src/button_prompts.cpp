@@ -321,9 +321,12 @@ bool PlayStation() { return g_want_playstation.load(); }
 
 bool DrawFace(ImDrawList* dl, const ImVec2& center, float radius, const char* xbox_letter, float alpha) {
   if (!PlayStation() || !xbox_letter || !xbox_letter[0]) return false;
-  dl->AddCircleFilled(center, radius, IM_COL32(12, 13, 16, int(230 * alpha)), 24);
-  dl->AddCircleFilled(center, radius * 0.86f, IM_COL32(44, 46, 52, int(255 * alpha)), 24);
-  dl->AddCircleFilled(center, radius * 0.74f, IM_COL32(30, 31, 36, int(255 * alpha)), 24);
+  dl->AddCircleFilled({center.x,center.y+radius*.1f},radius,IM_COL32(0,0,0,int(60*alpha)),64);
+  dl->AddCircleFilled(center, radius, IM_COL32(12, 13, 16, int(255 * alpha)), 64);
+  dl->AddCircleFilled(center, radius * 0.86f, IM_COL32(58, 62, 70, int(255 * alpha)), 64);
+  dl->AddCircleFilled(center, radius * 0.74f, IM_COL32(30, 33, 40, int(255 * alpha)), 64);
+  dl->PathArcTo(center,radius*.86f,3.55f,5.88f,32);
+  dl->PathStroke(IM_COL32(255,255,255,int(60*alpha)),0,std::max(1.f,radius*.04f));
   DrawSymbol(dl, center, radius, xbox_letter[0], alpha);
   return true;
 }
@@ -349,13 +352,30 @@ void DrawButton(ImDrawList* dl,const ImVec2& center,float radius,unsigned int fi
   dl->PathStroke(IM_COL32(255,255,255,opacity(145)),0,std::max(1.f,radius*.055f));
   dl->AddEllipseFilled({center.x,center.y-radius*.43f},{radius*.48f,radius*.15f},
                        IM_COL32(255,255,255,opacity(38)),0,48);
-  const float px=radius*1.65f;
-  if(!font) font=ImGui::GetFont();
-  auto* glyph=font->GetFontBaked(px)->FindGlyph(ImWchar(letter[0]));
-  // Align the visible glyph bounds, rather than guessing a baseline offset.
-  const ImVec2 at{center.x-(glyph->X0+glyph->X1)*.5f,
-                  center.y-(glyph->Y0+glyph->Y1)*.5f};
-  dl->AddText(font,px,at,IM_COL32(12,19,12,opacity(255)),letter);
+  // Vector lettering stays centered at every DPI and avoids mixing glyph
+  // metrics from a dynamic font bake with the renderer's fixed font atlas.
+  (void)font;
+  const ImU32 ink=IM_COL32(12,19,12,opacity(255));
+  const float stroke=radius*.15f;
+  auto point=[&](float x,float y) {return ImVec2(center.x+x*radius,center.y+y*radius);};
+  auto line=[&](float x1,float y1,float x2,float y2) {
+    const auto a=point(x1,y1),b=point(x2,y2);
+    dl->AddLine(a,b,ink,stroke);
+    dl->AddCircleFilled(a,stroke*.5f,ink,16);dl->AddCircleFilled(b,stroke*.5f,ink,16);
+  };
+  switch(letter?letter[0]:0) {
+    case 'A':
+      line(-.35f,.43f,0,-.46f);line(0,-.46f,.35f,.43f);line(-.22f,.13f,.22f,.13f);break;
+    case 'B':
+      line(-.27f,-.46f,-.27f,.46f);
+      dl->PathLineTo(point(-.27f,-.46f));
+      dl->PathBezierCubicCurveTo(point(.47f,-.50f),point(.47f,.01f),point(-.27f,-.01f));
+      dl->PathBezierCubicCurveTo(point(.52f,-.04f),point(.52f,.51f),point(-.27f,.46f));
+      dl->PathStroke(ink,0,stroke);break;
+    case 'X':line(-.31f,-.43f,.31f,.43f);line(-.31f,.43f,.31f,-.43f);break;
+    case 'Y':line(-.32f,-.43f,0,0);line(.32f,-.43f,0,0);line(0,0,0,.45f);break;
+    default:break;
+  }
 }
 
 const char* Shoulder(bool right) {

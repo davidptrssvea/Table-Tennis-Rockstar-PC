@@ -2,6 +2,11 @@
 
 ## Unreleased - community Windows integration
 
+- Redesign Photo mode help as a dark rounded panel with aligned controller and
+  keyboard columns, a zoom badge, spaced button actions and wrapped status text.
+  Replace misaligned Xbox font glyphs with centered vector lettering; smooth
+  PlayStation caps at high DPI. Shared overlay buttons receive the same fix.
+
 - Add Photo mode optical zoom (0.5x–5x): D-pad up/down, mouse wheel or Page
   Up/Down. Show magnification in the help and restore 1x with Reset View.
   Apply zoom only to Photo mode's perspective projection; retain original FOV.
