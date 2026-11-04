@@ -2,6 +2,13 @@
 
 ## Unreleased - community Windows integration
 
+- Port Photo mode from ThisIsAkill/Table-Tennis-Linux to Windows: F9 or both
+  stick clicks freeze an offline match, hide the HUD and enable a free camera.
+  Save clean PNGs in dist/photos, reset the view and return to play; support
+  keyboard/mouse, Xbox and PlayStation controls. Correct ultrawide capture
+  proportions, join screenshot work before closing and detach idle overlays.
+  Disable Photo mode during network sessions. Retain upstream MIT attribution.
+
 - Security hardening: invitation-room-only player hosts, four-client limit,
   return-path confirmation before membership/relay, bounded ingress/egress and
   error replies, protected active sessions and suppressed arbitrary LAN hints.

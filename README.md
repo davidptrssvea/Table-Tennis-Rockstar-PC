@@ -59,6 +59,16 @@ retain ReXGlue's BSD license. These features are not in the v1.1.2 download abov
   opened from **EXTRAS > ACHIEVEMENTS**, **F7**, or by holding **View/Back** for
   0.8 seconds. Scroll with the D-pad/stick, mouse wheel or arrow keys; shoulders
   and Page Up/Down change pages. B or F7 closes the list. Progress remains local.
+- **Photo mode:** press **F9** or click **both sticks** during an offline match
+  to freeze the action, hide the HUD and move a free camera. Left stick moves,
+  right stick looks, triggers change height, and shoulders adjust movement speed.
+  **X** saves a PNG to `dist/photos`, **Y** resets the camera, **A** toggles help
+  and **B** returns to play. Keyboard: WASD/arrows move, Q/E change height,
+  mouse drag looks, Enter saves, R resets, Space hides help and F9/Escape leaves.
+  PNGs exclude the help overlay and preserve the rendered resolution, with
+  ultrawide proportions corrected. Photo mode is disabled in network sessions.
+  Ported from ThisIsAkill's MIT implementation, commit
+  `ded80880299e26db86289326d31f1a8a2479fc82`, with Windows capture/lifetime handling.
 - **Button prompts:** Auto, Xbox and PlayStation choices in the launcher. Auto
   detects SDL PlayStation controllers. Replacing the game's texture icons needs
   the matched community SDK below; stock SDK builds apply this choice to the

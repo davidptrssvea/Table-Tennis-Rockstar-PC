@@ -18,6 +18,7 @@ set(TABLETENNIS_SOURCES
     src/stats_window.cpp
     src/pc_features.cpp
     src/pc_settings.cpp
+    src/photo_mode.cpp
     src/update_ui.cpp
     src/achievement_ui.cpp
     src/button_prompts.cpp

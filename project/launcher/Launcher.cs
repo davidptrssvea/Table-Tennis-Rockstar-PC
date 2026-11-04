@@ -329,7 +329,7 @@ namespace TableTennisLauncher
             };
             var calloutBody = new TextBlock
             {
-                Text = "- ESC : Exit game to Windows.\n- F10 : Show FPS, frame-time graph and presentation timing.\n- F7 / hold Back : Open achievements.",
+                Text = "- ESC : Exit game to Windows (leave Photo mode first).\n- F10 : Show FPS, frame-time graph and presentation timing.\n- F9 / both stick clicks : Photo mode during offline matches.\n- F7 / hold Back : Open achievements.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,

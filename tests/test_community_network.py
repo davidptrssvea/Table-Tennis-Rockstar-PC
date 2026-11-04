@@ -19,10 +19,12 @@ import setup_build
 def loopback_port():
     for _ in range(100):
         with socket.socket() as tcp, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
-            udp.bind(('127.0.0.1', 0))
-            port = udp.getsockname()[1]
+            # Windows may repeatedly allocate a UDP ephemeral port that is
+            # excluded for TCP (for example by Hyper-V). Choose TCP first.
+            tcp.bind(('127.0.0.1', 0))
+            port = tcp.getsockname()[1]
             try:
-                tcp.bind(('127.0.0.1', port))
+                udp.bind(('127.0.0.1', port))
                 return port
             except OSError:
                 continue

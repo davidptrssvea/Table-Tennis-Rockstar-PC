@@ -14,6 +14,7 @@
 #include "system_link.h"
 #include "frame_pacer.h"
 #include "stats_window.h"
+#include "photo_mode.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -150,6 +151,9 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ~TabletennisApp() override {
+    photo_ui_alive_->store(false);
+    tabletennis::photo::Shutdown();
+    rex::ui::UnregisterBind("bind_photo_mode");
     tabletennis::updates::Stop();
     tabletennis::pc_settings::SetOpenCallback({});
     tabletennis::pc::SetAchievementsToggle({});
@@ -171,7 +175,13 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnKeyDown(rex::ui::KeyEvent& event) override {
-    if (!tabletennis::pc_settings::HandleKey(event) && !tabletennis::achievement_ui::HandleKey(event)) rex::ui::ProcessKeyEvent(event);
+    if (!tabletennis::photo::HandleKey(event,true) && !tabletennis::pc_settings::HandleKey(event) && !tabletennis::achievement_ui::HandleKey(event)) rex::ui::ProcessKeyEvent(event);
+  }
+  void OnKeyUp(rex::ui::KeyEvent& event) override {tabletennis::photo::HandleKey(event,false);}
+  bool OnWindowCloseRequested() override {
+    photo_ui_alive_->store(false);
+    tabletennis::photo::Shutdown();
+    return true;
   }
 
  protected:
@@ -379,6 +389,7 @@ class TabletennisApp : public rex::ReXApp {
     }
 
     // Hotkey F10 toggles FPS overlay during gameplay
+    rex::ui::RegisterBind("bind_photo_mode","F9","Photo Mode",[]{tabletennis::photo::RequestToggle();});
     rex::ui::RegisterBind("bind_toggle_fps", "F10", "Toggle In-Game FPS Counter", [this] {
       if (tabletennis::stats_window::IsVisible()) {
         tabletennis::stats_window::Hide();
@@ -407,6 +418,14 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnPostSetup() override {
+    tabletennis::photo::Init([this]() -> rex::ui::Presenter* {
+      auto* graphics=runtime()?runtime()->graphics_system():nullptr;
+      return graphics?graphics->presenter():nullptr;
+    },[this,alive=photo_ui_alive_] {
+      app_context().CallInUIThreadDeferred([this,alive] {
+        if(alive->load() && imgui_drawer()) new tabletennis::photo::Overlay(imgui_drawer());
+      });
+    });
 #if defined(TT_COMMUNITY_NETWORK)
     REXLOG_INFO("Tabletennis: Network setup: enabled={}, system_link={}, server={}, player={}",
                 tabletennis::lan::Enabled(), rex::cvar::GetFlagByName("system_link"),
@@ -442,6 +461,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
  private:
+  std::shared_ptr<std::atomic<bool>> photo_ui_alive_=std::make_shared<std::atomic<bool>>(true);
   void ValidateIsoSource(const std::filesystem::path& iso_path) {
     std::ifstream f(iso_path, std::ios::binary);
     if (!f.is_open()) {

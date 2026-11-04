@@ -1,3 +1,5 @@
 Achievement UI, PlayStation prompt code/art, game networking, relay, and the PC SETTINGS Flash menu/polling adapted from ThisIsAkill/Table-Tennis-Linux, commit 7bff91c561fa0e424562c6d851b9008e9fc9511e (MIT).
 https://github.com/ThisIsAkill/Table-Tennis-Linux
 Windows integration and frame-pacing adaptations by this project.
+
+Photo mode/camera hooks and PNG writer adapted from commit ded80880299e26db86289326d31f1a8a2479fc82 (MIT). Windows capture lifetime, idle overlay, keyboard input and aspect-correct export adapted by this project.

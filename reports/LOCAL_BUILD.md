@@ -1,5 +1,46 @@
 # Local build and source distribution
 
+## Photo mode Windows port - 2026-11-04 (unreleased)
+
+Adapted the MIT Photo mode from ThisIsAkill/Table-Tennis-Linux commit
+`ded80880299e26db86289326d31f1a8a2479fc82`. F9 or both stick clicks enter an
+offline match's free camera; Xbox/PlayStation prompts share the existing artwork.
+Keyboard/mouse movement, reset, help, save and leave controls are included.
+Network session keys prevent activation; menus and other open panels are rejected.
+No SDK ABI changes or extra game assets are needed. All 61 required function
+registrations and the existing 23 hash-checked native edits were verified.
+
+The original slow-motion scale was overwritten by the game's controller, and
+the timer clamped delta to 0.0001 seconds. Added a guarded match-timer hook that
+applies a positive 1e-8 delta at the timer update, temporarily lowers the minimum
+and restores it exactly. This avoids division by zero and stops visible pose
+drift. Timer elapsed remained bit-identical over five wall-clock seconds;
+reciprocal delta was finite. Leaving restored warp 1.0, delta 1/60 and advancing
+time. A real Exhibition serve was frozen, viewed from a moved/rotated/raised
+camera, saved and resumed with the score and service meter restored.
+
+DirectX 12 readback saves RGB PNGs without ImGui/help or the hidden HUD. Visually
+checked real 1280x720 and 3840x1646 (21:9, 3x render scale) exports. The independent
+PNG decoder checks row padding, channels, checksums/deflate, 4K dimensions and
+bilinear ultrawide correction, including invalid/overflowing stride rejection.
+One joined worker owns each capture; window close restores state and joins it
+before the SDK's hard exit. Help/notices detach when idle; presentation returned
+to approximately 60 FPS after leaving Photo mode. The help is visible immediately
+on entry. Main-menu F9 displays the offline-match requirement.
+
+All 71 opt-in regression tests passed, including native networking, image export,
+pacing, launcher validation and ISO boot. Two initial loopback test failures were
+Windows TCP exclusions on UDP-assigned ephemeral ports; fixtures now choose TCP
+first. Focused network/launcher reruns and the complete suite passed. A private
+controller fixture exercised match input; its hook is absent from production.
+The offline-only guard was reviewed; no new two-PC Photo-mode test is claimed.
+
+Deployed the production game and updated launcher help into
+`scratch/community-feature-test/dist` and the uncompressed
+`scratch/online-audit-update/dist`; build ID `BC3A7F72A0A8`. Both multiplayer PCs
+need this matching game/engine build. Backups are in `scratch/photo-backup-20261104`.
+Stable root dist, the desktop shortcut, private ISO ZIP and GitHub are unchanged.
+
 ## Community integration - 2026-11-03 (unreleased)
 
 Branch `feature/community-windows-port` adapts upstream MIT game-side code from

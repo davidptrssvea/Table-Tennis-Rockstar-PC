@@ -22,6 +22,8 @@ FIXED_FILES = {
     'project/src/pc_features.cpp', 'project/src/pc_features.h',
     'project/src/pc_settings.cpp', 'project/src/pc_settings.h', 'project/src/settings_store.h',
     'project/src/update_ui.cpp', 'project/src/update_ui.h',
+    'project/src/photo_mode.cpp', 'project/src/photo_mode.h', 'project/src/photo_image.h',
+    'tests/test_photo_image.py', 'tests/photo_image_probe.cpp',
     'project/tools/menu_settings.py',
     'project/src/achievement_ui.cpp', 'project/src/achievement_ui.h',
     'project/src/button_prompts.cpp', 'project/src/button_prompts.h', 'project/src/button_prompt_art.inc',

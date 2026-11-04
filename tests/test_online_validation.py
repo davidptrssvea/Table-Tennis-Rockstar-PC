@@ -234,9 +234,9 @@ class Probe {
                            check=True, timeout=5)
             # Verify the production Windows server's actual game protocol responds.
             with socket.socket() as tcp, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
-                udp.bind(('127.0.0.1', 0))
-                port = udp.getsockname()[1]
-                tcp.bind(('127.0.0.1', port))
+                tcp.bind(('127.0.0.1', 0))
+                port = tcp.getsockname()[1]
+                udp.bind(('127.0.0.1', port))
             with (folder / 'server.log').open('w') as log:
                 process = subprocess.Popen([sys.executable, str(ROOT / 'server/ttlink_server.py'),
                                             '--bind', '127.0.0.1', '--port', str(port)],
