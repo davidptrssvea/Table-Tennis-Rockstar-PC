@@ -60,3 +60,6 @@ class PhotoImageTests(unittest.TestCase):
 
     def test_4k_export(self):
         self.decode('4k', (3840, 2160))
+
+    def test_optical_zoom_and_limits(self):
+        subprocess.run([str(self.exe), 'zoom', str(self.folder/'unused')], check=True, timeout=10)

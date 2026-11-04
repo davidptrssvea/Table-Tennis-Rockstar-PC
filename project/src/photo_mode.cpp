@@ -7,6 +7,7 @@
 #include "pc_settings.h"
 #include "button_prompts.h"
 #include "photo_image.h"
+#include "photo_camera.h"
 #include <rex/ui/ui_event.h>
 
 #include <imgui.h>
@@ -90,6 +91,7 @@ std::atomic<bool> g_save_requested{false};
 std::atomic<float> g_move_x{0}, g_move_z{0}, g_look_x{0}, g_look_y{0}, g_rise{0};
 std::atomic<float> g_boost{1};
 std::atomic<float> g_mouse_dx{0}, g_mouse_dy{0};  // from the overlay (UI thread)
+std::atomic<float> g_zoom{1}, g_zoom_steps{0}, g_pad_zoom{0};
 // Messages for the overlay.
 std::string g_notice;
 Clock::time_point g_notice_until{};
@@ -255,6 +257,8 @@ bool HandleKey(rex::ui::KeyEvent& event,bool down) {
     case K::kA:case K::kLeft:bit=4;break;case K::kD:case K::kRight:bit=8;break;
     case K::kQ:bit=16;break;case K::kE:bit=32;break;
     case K::kShift:bit=64;break;case K::kControl:bit=128;break;
+    case K::kPrior:if(down) g_zoom_steps.fetch_add(event.prev_state()?.25f:1.f);break;
+    case K::kNext:if(down) g_zoom_steps.fetch_sub(event.prev_state()?.25f:1.f);break;
     case K::kEscape:if(tap) {g_escape_drain.store(true);RequestToggle();}break;
     case K::kReturn:if(tap) g_save_requested.store(true);break;
     case K::kR:if(tap) g_reset_requested.store(true);break;
@@ -296,6 +300,7 @@ bool FilterInput(uint32_t user, achievement_ui::PadSample& pad) {
   g_look_y.store(Stick(pad.thumb_ry));
   g_rise.store((float(pad.right_trigger)-float(pad.left_trigger))/255.0f);
   g_boost.store((pad.buttons & kRB) ? 3.0f : (pad.buttons & kLB) ? 0.3f : 1.0f);
+  g_pad_zoom.store(float(bool(pad.buttons & 0x0001))-float(bool(pad.buttons & 0x0002)));
   // The frozen game sees an idle pad.
   pad = achievement_ui::PadSample{};
   return true;
@@ -324,6 +329,7 @@ void Overlay::OnDraw(ImGuiIO& io) {
     g_mouse_dx.fetch_add(io.MouseDelta.x);
     g_mouse_dy.fetch_add(io.MouseDelta.y);
   }
+  if(active && !io.AppFocusLost) g_zoom_steps.fetch_add(io.MouseWheel);
   ImDrawList* dl = ImGui::GetForegroundDrawList();
   const float s = io.DisplaySize.y / 720.0f;
   const float x0 = 28.0f * s;
@@ -340,6 +346,9 @@ void Overlay::OnDraw(ImGuiIO& io) {
   if (active && g_help.load()) {
     const ImU32 col = IM_COL32(235, 237, 240, 255);
     line("Keyboard: WASD move, Q/E height, mouse drag look",col);
+    char zoom[96];
+    std::snprintf(zoom,sizeof(zoom),"Zoom %.2fx: D-pad up/down, mouse wheel or Page Up/Down",g_zoom.load());
+    line(zoom,col);
     line("Enter save, R reset, Space hide help, F9/Esc leave",col);
     y-=body_px*1.35f;
     const char* letters[]={"A","B","X","Y"};
@@ -377,6 +386,7 @@ extern "C" void sub_821B5A68(PPCContext& ctx, uint8_t* base) {
       Notice("PHOTO MODE OFF");
       g_keys.store(0);g_mouse_dx.store(0);g_mouse_dy.store(0);g_save_requested.store(false);
       g_move_x.store(0);g_move_z.store(0);g_look_x.store(0);g_look_y.store(0);g_rise.store(0);
+      g_pad_zoom.store(0);g_zoom_steps.store(0);
       REXLOG_INFO("Tabletennis: photo mode off");
     } else if (InNetworkSession()) {
       Notice("PHOTO MODE IS NOT AVAILABLE IN NETWORK MATCHES");
@@ -384,6 +394,7 @@ extern "C" void sub_821B5A68(PPCContext& ctx, uint8_t* base) {
       Notice("PHOTO MODE WORKS DURING A MATCH");
     } else {
       g_active.store(true);
+      g_zoom.store(1);g_zoom_steps.store(0);g_pad_zoom.store(0);
       g_help.store(true);
       Notice("PHOTO MODE ON");
       REXLOG_INFO("Tabletennis: photo mode on");
@@ -417,6 +428,7 @@ extern "C" void sub_821B5A68(PPCContext& ctx, uint8_t* base) {
     g_pos = g_start_pos;
     g_yaw = g_start_yaw;
     g_pitch = g_start_pitch;
+    g_zoom.store(1);g_zoom_steps.store(0);
     g_last_frame = now;
     g_camera_ready = true;
   }
@@ -436,12 +448,15 @@ extern "C" void sub_821709F8(PPCContext& ctx, uint8_t* base) {
     g_pos = g_start_pos;
     g_yaw = g_start_yaw;
     g_pitch = g_start_pitch;
+    g_zoom.store(1);g_zoom_steps.store(0);
   }
   const float dt = std::min(0.1f, std::chrono::duration<float>(now - g_last_frame).count());
   g_last_frame = now;
   // Look: right stick and mouse drag.
   const auto keys=g_keys.load();
-  if(NowNs()-g_last_pad.load()>250000000) {g_move_x.store(0);g_move_z.store(0);g_look_x.store(0);g_look_y.store(0);g_rise.store(0);g_boost.store(1);}
+  if(NowNs()-g_last_pad.load()>250000000) {g_move_x.store(0);g_move_z.store(0);g_look_x.store(0);g_look_y.store(0);g_rise.store(0);g_boost.store(1);g_pad_zoom.store(0);}
+  const float zoom_steps=g_zoom_steps.exchange(0)+g_pad_zoom.load()*dt*8;
+  g_zoom.store(camera::ZoomStep(g_zoom.load(),zoom_steps));
   g_yaw -= g_look_x.load() * kLookSpeed * dt + g_mouse_dx.exchange(0.0f) * 0.004f;
   g_pitch += g_look_y.load() * kLookSpeed * dt - g_mouse_dy.exchange(0.0f) * 0.004f;
   g_pitch = std::clamp(g_pitch, -1.45f, 1.45f);
@@ -483,4 +498,19 @@ extern "C" void sub_82187BE8(PPCContext& ctx,uint8_t* base) {
   StoreF(base,kMatchTimer+36,kPhotoTimeScale);
   __imp__sub_82187BE8(ctx,base);
   REX_STORE_U32(kMatchTimer+36,minimum);
+}
+
+// Apply zoom where the renderer rebuilds a view's perspective projection.
+// Restore the source FOV immediately so repeated frames never compound zoom.
+extern "C" void __imp__sub_82153598(PPCContext& ctx,uint8_t* base);
+extern "C" void sub_82153598(PPCContext& ctx,uint8_t* base) {
+  std::lock_guard lock(g_camera_mutex);
+  const uint32_t view=ctx.r3.u32;
+  if(!g_running.load() || !g_active.load() || !view) {
+    __imp__sub_82153598(ctx,base);return;
+  }
+  const uint32_t original=REX_LOAD_U32(view+824);
+  StoreF(base,view+824,camera::ZoomFov(LoadF(base,view+824),g_zoom.load()));
+  __imp__sub_82153598(ctx,base);
+  REX_STORE_U32(view+824,original);
 }

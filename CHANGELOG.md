@@ -2,6 +2,10 @@
 
 ## Unreleased - community Windows integration
 
+- Add Photo mode optical zoom (0.5x–5x): D-pad up/down, mouse wheel or Page
+  Up/Down. Show magnification in the help and restore 1x with Reset View.
+  Apply zoom only to Photo mode's perspective projection; retain original FOV.
+
 - Port Photo mode from ThisIsAkill/Table-Tennis-Linux to Windows: F9 or both
   stick clicks freeze an offline match, hide the HUD and enable a free camera.
   Save clean PNGs in dist/photos, reset the view and return to play; support

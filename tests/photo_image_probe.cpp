@@ -1,9 +1,24 @@
 #include "photo_image.h"
+#include "photo_camera.h"
 #include <cassert>
 #include <limits>
 #include <string>
 int main(int argc,char** argv) {
   assert(argc==3);
+  if(std::string(argv[1])=="zoom") {
+    using namespace tabletennis::photo::camera;
+    constexpr double radians=3.14159265358979323846/180;
+    for(float fov:{30.f,60.f,90.f}) {
+      assert(ZoomFov(fov,1)==fov);
+      // Projected object size must double at 2x without moving the camera.
+      const double ratio=std::tan(fov*radians/2)/std::tan(ZoomFov(fov,2)*radians/2);
+      assert(std::abs(ratio-2)<0.00001);
+      assert(ZoomFov(fov,.5f)>fov);
+    }
+    assert(ZoomStep(1,1000)==5 && ZoomStep(1,-1000)==.5f);
+    assert(ZoomFov(60,std::numeric_limits<float>::quiet_NaN())==60);
+    return 0;
+  }
   const bool large=std::string(argv[1])=="4k";
   const uint32_t width=large?3840:16,height=large?2160:9;
   const size_t stride=size_t(width)*4+16;

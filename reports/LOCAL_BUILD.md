@@ -1,5 +1,29 @@
 # Local build and source distribution
 
+## Photo mode zoom - 2026-11-04 (unreleased)
+
+Added optical magnification from 0.5x to 5x, controlled by D-pad up/down,
+mouse wheel or Page Up/Down. Help displays the current factor; Reset View
+restores 1x. Keyboard taps queue steps so short key presses cannot disappear
+between game frames; holding repeats smaller steps. The view's original FOV is
+changed temporarily only inside its perspective-projection builder and restored
+bit-for-bit afterward. Zoom never moves the camera or compounds between frames.
+
+In a separate local tournament match, visually verified 1x to 2.32x with the
+controller fixture, reset to 1x, mouse-wheel zoom to 1.35x, PNG export retaining
+that zoom, and normal perspective after leaving. The resumed projection's cached
+tangent matched its live unzoomed FOV; FOV itself naturally changes with normal
+game camera animation. A first attempt at rebuilding from the camera-reader
+object did not affect rendering and was replaced with the actual view builder.
+
+Four native image/zoom checks pass, including projected size doubling at 2x,
+zoom limits, PNG channels/row padding, 4K and ultrawide export. Fifteen local-build
+regression checks pass, including isolated retail ISO boot and pacing/layout.
+All 62 required registrations and the existing 23 native edits remain verified.
+Production has no private controller hook. Deployed only to the experimental
+installation and uncompressed private update; new build ID `821AFB5625FA`.
+Both multiplayer PCs must use the matching build. Private ISO ZIP and GitHub publication are unchanged.
+
 ## Photo mode Windows port - 2026-11-04 (unreleased)
 
 Adapted the MIT Photo mode from ThisIsAkill/Table-Tennis-Linux commit
@@ -244,7 +268,7 @@ simulation ticks. Smooth true 120/144 FPS gameplay remains unresolved; higher ca
 are retained as experimental and the launcher defaults to 60 FPS/VSync.
 
 In the new 60 mode, sampled settled two-second windows measured about 60.0
-submissions/s, mean 16.66–16.67 ms, p95 around 17.4–17.8 ms, with occasional
+submissions/s, mean 16.66â€“16.67 ms, p95 around 17.4â€“17.8 ms, with occasional
 outliers. These are local submission timing observations, not a display-capture
 benchmark or proof of a fix on the reporter's RTX 5070 system. Initial loading
 and shader compilation stalls must not be mistaken for settled gameplay pacing.

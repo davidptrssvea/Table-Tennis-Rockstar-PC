@@ -65,6 +65,9 @@ retain ReXGlue's BSD license. These features are not in the v1.1.2 download abov
   **X** saves a PNG to `dist/photos`, **Y** resets the camera, **A** toggles help
   and **B** returns to play. Keyboard: WASD/arrows move, Q/E change height,
   mouse drag looks, Enter saves, R resets, Space hides help and F9/Escape leaves.
+  **Zoom:** D-pad up/down, mouse wheel or Page Up/Page Down (0.5x–5x).
+  Zoom changes the lens's field of view without moving the camera; reset also
+  restores 1x zoom. The current magnification appears in the help overlay.
   PNGs exclude the help overlay and preserve the rendered resolution, with
   ultrawide proportions corrected. Photo mode is disabled in network sessions.
   Ported from ThisIsAkill's MIT implementation, commit
