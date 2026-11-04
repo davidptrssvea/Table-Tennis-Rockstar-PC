@@ -92,10 +92,19 @@ class LocalBuildTests(unittest.TestCase):
 
     def test_missing_network_callback_registration_rejected(self):
         table = '{ 0x822F9900, sub_822F9900 },\n'
-        with self.assertRaisesRegex(ValueError, '0x822F99C0'):
-            verify_function_table(table, {0x822F9900, 0x822F99C0})
-        verify_function_table(table + '{ 0x822F99C0, sub_822F99C0 },\n',
-                              {0x822F9900, 0x822F99C0})
+        # CREATE MATCH and the separate-PC join crash must both fail the build
+        # if code generation omits or misregisters their indirect callbacks.
+        for address in (0x822F99C0, 0x823A83F8):
+            with self.subTest(address=f'0x{address:08X}'):
+                required = {0x822F9900, address}
+                with self.assertRaisesRegex(ValueError, f'0x{address:08X}'):
+                    verify_function_table(table, required)
+                wrong = table + f'{{ 0x{address:08X}, sub_822F9900 }},\n'
+                with self.assertRaisesRegex(ValueError, f'0x{address:08X}'):
+                    verify_function_table(wrong, required)
+                verify_function_table(table +
+                                      f'{{ 0x{address:08X}, sub_{address:08X} }},\n',
+                                      required)
 
     def test_public_allowlist_excludes_all_local_game_output(self):
         names = audit()

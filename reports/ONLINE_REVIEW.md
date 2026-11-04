@@ -1,8 +1,9 @@
 # Windows online review - 2026-11-03
 
 This review covers the community Windows branch, not the published v1.1.2 release.
-The client crash on the second physical PC still requires that PC's crash log.
-Two corrected local instances reaching gameplay does not diagnose that crash.
+The second PC's logs were received on 2026-11-04 and identify an unregistered
+callback at 0x823A83F8. The reviewed update includes this callback; a fresh
+physical two-PC test is still required. See the log follow-up below.
 
 ## Corrections
 
@@ -67,7 +68,8 @@ preserved and the previous files backed up. A separate uncompressed update
 folder contains the complete replacement set and SHA-256 manifest. Do not
 transfer just the EXE; update both PCs and restart the relay.
 
-Still pending: the second PC's exact crash, complete matches on two physical PCs,
+Still pending: confirmation on the second PC after installing the matched update,
+complete matches on two physical PCs,
 interrupted-match recovery, spectator gameplay, large-room load, and Internet/NAT
 combinations. The TTV1 relay has room/token checks but is not an encrypted,
 independently security-audited public multiplayer service.
@@ -90,3 +92,37 @@ Trusted signing and publisher identity setup remain release prerequisites to
 address these warnings properly. No security settings, exclusions, trusted roots
 or firewall rules were changed. The private ISO ZIP and public release are not
 updated by this review.
+
+## Client log follow-up - 2026-11-04
+
+The private attachment contained five logs from 2026-11-03. Logs 004 and 005
+terminate with the same fatal: an invalid or unregistered guest function at
+**0x823A83F8**, at 21:37:20 and 21:38:05 respectively (timestamps as recorded).
+Immediately before the fatal, the client receives session traffic, completes
+QoS queries, and registers the host's session address. A direct connection and
+roughly 5-10 ms RTT were already established. This identifies a missing game
+callback as the immediate crash trigger; it is not a SmartScreen termination.
+
+Logs 001-003 end with explicit Quit/ESC shutdown, not this fatal. Log 003 also
+shows loss of the host path and later server reconnection. Those network events
+do not establish the cause of the separate fatal callback failure.
+
+The callback at 0x823A83F8 is one of the additional network overrides already
+included by the forced-regeneration correction. The local update's generated
+registration table includes it. PE inspection of the final production EXE also
+found its native mapping into an executable section, alongside 0x822F99C0 and
+0x823A8408. The installed local EXE and update EXE match byte-for-byte:
+
+- EXE SHA-256: `fa42c716a799bc9b7e9b517e126630c5cc15d0c5df921cb2594a2dc09edfd559`
+- Matched online build ID: `572B1869C071`
+
+The logs precede the later audit build and contain no EXE hash/build ID. They
+therefore cannot identify the precise EXE used on that PC. A stale copy is
+consistent with the missing registration; do not claim that a specific file
+transfer or user action has been proved. Both PCs should receive the complete
+existing update set, then repeat the lobby/match test with matching build IDs.
+The build-guard regression now explicitly checks missing and incorrectly named
+registrations for this client callback as well as the CREATE MATCH callback.
+No new game/SDK binary was needed for this diagnostic follow-up. The private ZIP
+and official release remain unchanged. Logs and private machine addresses were
+not added to public source.
