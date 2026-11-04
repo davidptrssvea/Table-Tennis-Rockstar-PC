@@ -352,14 +352,7 @@ void Halftone(ImDrawList* dl, ImVec2 min, ImVec2 max, ImU32 col, float spacing, 
 // Xbox-style face button: dark ring, coloured disc, letter.
 void ButtonGlyph(ImDrawList* dl, ImVec2 center, float radius, ImU32 fill, const char* letter,
                  float alpha) {
-  if (tabletennis::prompts::DrawFace(dl, center, radius, letter, alpha)) return;
-  dl->AddCircleFilled(center, radius, Col(20, 22, 28, 0.9f * alpha), 24);
-  dl->AddCircleFilled(center, radius * 0.84f, fill, 24);
-  dl->AddCircle(center, radius * 0.84f, White(0.35f * alpha), 24, radius * 0.12f);
-  const float px = radius * 1.55f;
-  ImFont* font = Heavy(px);
-  const float w = TextWidth(font, px, letter);
-  AddText(dl, font, px, ImVec2(center.x - w * 0.5f, CapsTop(center.y, px)), White(alpha), letter);
+  tabletennis::prompts::DrawButton(dl,center,radius,fill,letter,Heavy(radius*1.65f),alpha);
 }
 
 // Gamerscore as the game shows points: a heavy outlined number and a white "G" disc.

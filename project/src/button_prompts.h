@@ -16,6 +16,7 @@
 
 struct ImDrawList;
 struct ImVec2;
+struct ImFont;
 namespace rex::memory {
 class Memory;
 }
@@ -40,6 +41,10 @@ bool PlayStation();
 // Our own overlays: draws a PlayStation face button for the Xbox letter ('A', 'B', 'X' or 'Y')
 // and returns true, or returns false when Xbox icons are shown (the caller draws its own).
 bool DrawFace(ImDrawList* dl, const ImVec2& center, float radius, const char* xbox_letter, float alpha);
+
+// Shared overlay button: shaded Xbox cap or the selected PlayStation symbol.
+void DrawButton(ImDrawList* dl, const ImVec2& center, float radius, unsigned int fill,
+                const char* letter, ImFont* font, float alpha);
 
 // "LB"/"RB" or "L1"/"R1".
 const char* Shoulder(bool right);

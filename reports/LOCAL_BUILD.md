@@ -543,3 +543,21 @@ update folder, with prior EXE backed up and settings retained. Normal desktop
 shortcut/stable dist, private ZIP and published release are unchanged.
 Online build ID: 561A3B54BF1E.
 EXE SHA-256: 30cd67c3b9c08dac068c9cc54bb1426e74c80da344889bb512df31243828a860.
+
+
+## Overlay button appearance - 2026-11-04
+
+The user confirmed prompt functionality but found PC SETTINGS' flat Xbox circles
+and high letter placement unattractive. A shared overlay DrawButton now adds a
+smooth dark rim, a shaded color cap and subtle highlight/shadow, and centers text
+using the actual baked glyph bounds. PC SETTINGS and achievements share it;
+PlayStation mode retains its existing vector symbols. No retail texture or game
+input behavior was changed.
+
+The actual ImGui geometry/font atlas was exported by a private headless preview
+and rasterized for visual inspection (not a mockup using a separate drawing
+implementation). The inspected preview uses the game's Arial Bold face. Windows
+production build and all three ISO boot subcases passed. No new tests were added
+for this reversible visual change. Local experimental EXE and uncompressed update
+were refreshed with backups; settings, stable desktop installation, private ZIP
+and published release were left alone. Matched online build ID: E02C432D8073.

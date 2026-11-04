@@ -328,6 +328,36 @@ bool DrawFace(ImDrawList* dl, const ImVec2& center, float radius, const char* xb
   return true;
 }
 
+void DrawButton(ImDrawList* dl,const ImVec2& center,float radius,unsigned int fill,
+                const char* letter,ImFont* font,float alpha) {
+  if(DrawFace(dl,center,radius,letter,alpha)) return;
+  const auto opacity=[alpha](int a) {return int(std::clamp(alpha,0.f,1.f)*a);};
+  dl->AddCircleFilled({center.x,center.y+radius*.10f},radius*1.02f,
+                      IM_COL32(0,0,0,opacity(48)),64);
+  dl->AddCircleFilled(center,radius,IM_COL32(32,35,37,opacity(255)),64);
+  const int first=dl->VtxBuffer.Size;
+  dl->AddCircleFilled(center,radius*.87f,fill,64);
+  // Shade the actual circle mesh, preserving the antialiased edge alpha.
+  for(int i=first;i<dl->VtxBuffer.Size;++i) {
+    auto& v=dl->VtxBuffer[i];
+    const float t=std::clamp((v.pos.y-center.y)/radius,-1.f,1.f);
+    const float light=1.f-.27f*t;
+    const auto channel=[&](int shift) {return std::clamp(int(((fill>>shift)&255)*light),0,255);};
+    v.col=IM_COL32(channel(IM_COL32_R_SHIFT),channel(IM_COL32_G_SHIFT),channel(IM_COL32_B_SHIFT),(v.col>>IM_COL32_A_SHIFT)&255);
+  }
+  dl->PathArcTo(center,radius*.88f,3.55f,5.88f,32);
+  dl->PathStroke(IM_COL32(255,255,255,opacity(145)),0,std::max(1.f,radius*.055f));
+  dl->AddEllipseFilled({center.x,center.y-radius*.43f},{radius*.48f,radius*.15f},
+                       IM_COL32(255,255,255,opacity(38)),0,48);
+  const float px=radius*1.65f;
+  if(!font) font=ImGui::GetFont();
+  auto* glyph=font->GetFontBaked(px)->FindGlyph(ImWchar(letter[0]));
+  // Align the visible glyph bounds, rather than guessing a baseline offset.
+  const ImVec2 at{center.x-(glyph->X0+glyph->X1)*.5f,
+                  center.y-(glyph->Y0+glyph->Y1)*.5f};
+  dl->AddText(font,px,at,IM_COL32(12,19,12,opacity(255)),letter);
+}
+
 const char* Shoulder(bool right) {
   if (PlayStation()) return right ? "R1" : "L1";
   return right ? "RB" : "LB";

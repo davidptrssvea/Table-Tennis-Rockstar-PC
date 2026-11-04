@@ -2,6 +2,10 @@
 
 ## Unreleased - community Windows integration
 
+- Polish Xbox buttons in PC SETTINGS and achievements: shaded caps, dark rims,
+  subtle highlights/shadows and letters centered by their visible glyph bounds.
+  Retain the selected PlayStation symbols.
+
 - Complete PlayStation replacements for 17 additional button/guide images
   (23 verified variants total): startup/dialogs, pause shoulders, HUD triggers,
   training controls and guide indicator. Restore each exact original in Xbox
