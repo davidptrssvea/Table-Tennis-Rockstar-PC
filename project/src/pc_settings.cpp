@@ -203,7 +203,7 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   const float x=(w-920*s)/2,y=95*s,r=x+920*s;
   auto* dl=ImGui::GetForegroundDrawList();
   dl->AddRectFilled({0,0},io.DisplaySize,IM_COL32(0,0,0,100));
-  dl->AddRectFilled({x,y},{r,y+65*s},IM_COL32(30,56,75,255),18*s);
+  dl->AddRectFilled({x,y},{r,y+65*s},IM_COL32(30,56,75,255));
   dl->AddRectFilled({x,y+70*s},{r,y+490*s},IM_COL32(12,13,16,190));
   auto text=[&](float px,float xx,float yy,ImU32 color,const char* value,bool heavy=true){
     auto* font=heavy?achievement_ui::HeadlineFont(px):achievement_ui::BodyFont();
@@ -231,12 +231,14 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   dl->PopClipRect();
   dl->AddRectFilled({x,y+495*s},{r,y+543*s},IM_COL32(205,208,210,255));
   const auto ink=IM_COL32(20,22,25,255);
-  text(21*s,x+24*s,y+505*s,ink,"D-PAD: SELECT / CHANGE");
+  prompts::DrawButtonLabel(dl,{x+24*s,y+519*s},21*s,ink,
+                           "D-PAD: SELECT / CHANGE",achievement_ui::HeadlineFont(21*s));
   auto action=[&](float xx,const char* letter,const char* label,ImU32 color) {
     ImVec2 center{xx,y+519*s};
     prompts::DrawButton(dl,center,13*s,color,letter,
                         achievement_ui::HeadlineFont(13*s*1.65f),1.f);
-    text(21*s,xx+21*s,y+505*s,ink,label);
+    prompts::DrawButtonLabel(dl,{xx+21*s,center.y},21*s,ink,label,
+                             achievement_ui::HeadlineFont(21*s));
   };
   action(x+415*s,"A","CHANGE",IM_COL32(90,186,40,255));
   action(x+640*s,"B","SAVE & BACK",IM_COL32(210,44,44,255));

@@ -46,6 +46,10 @@ bool DrawFace(ImDrawList* dl, const ImVec2& center, float radius, const char* xb
 void DrawButton(ImDrawList* dl, const ImVec2& center, float radius, unsigned int fill,
                 const char* letter, ImFont* font, float alpha);
 
+// Left-aligned text whose visible glyphs share the button's vertical center.
+void DrawButtonLabel(ImDrawList* dl, const ImVec2& left_center, float px,
+                     unsigned int color, const char* text, ImFont* font);
+
 // "LB"/"RB" or "L1"/"R1".
 const char* Shoulder(bool right);
 

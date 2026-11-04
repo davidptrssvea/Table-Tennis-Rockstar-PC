@@ -380,6 +380,22 @@ void DrawButton(ImDrawList* dl,const ImVec2& center,float radius,unsigned int fi
   }
 }
 
+void DrawButtonLabel(ImDrawList* dl,const ImVec2& left_center,float px,
+                     unsigned int color,const char* text,ImFont* font) {
+  if(!text || !text[0]) return;
+  if(!font) font=ImGui::GetFont();
+  const int first=dl->VtxBuffer.Size;
+  dl->AddText(font,px,{left_center.x,left_center.y-px*.5f},color,text);
+  if(dl->VtxBuffer.Size==first) return;
+  float top=dl->VtxBuffer[first].pos.y,bottom=top;
+  for(int i=first+1;i<dl->VtxBuffer.Size;i++) {
+    top=std::min(top,dl->VtxBuffer[i].pos.y);
+    bottom=std::max(bottom,dl->VtxBuffer[i].pos.y);
+  }
+  const float offset=left_center.y-(top+bottom)*.5f;
+  for(int i=first;i<dl->VtxBuffer.Size;i++) dl->VtxBuffer[i].pos.y+=offset;
+}
+
 const char* Shoulder(bool right) {
   if (PlayStation()) return right ? "R1" : "L1";
   return right ? "RB" : "LB";

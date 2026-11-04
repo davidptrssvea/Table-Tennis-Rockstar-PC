@@ -343,13 +343,13 @@ void Overlay::OnDraw(ImGuiIO& io) {
     dl->AddText(body,size*s,at(x,y),color,value);
   };
   if(help) {
-    dl->AddRectFilled(at(0,5),at(650,269),IM_COL32(0,0,0,70),12*s);
-    dl->AddRectFilled(at(0,0),at(650,264),IM_COL32(13,18,27,242),12*s);
-    dl->AddRect(at(0,0),at(650,264),IM_COL32(135,155,182,65),12*s,0,1*s);
-    dl->AddRectFilled(at(16,14),at(20,40),gold,2*s);
+    dl->AddRectFilled(at(0,5),at(650,269),IM_COL32(0,0,0,70));
+    dl->AddRectFilled(at(0,0),at(650,264),IM_COL32(13,18,27,242));
+    dl->AddRect(at(0,0),at(650,264),IM_COL32(135,155,182,65),0,0,1*s);
+    dl->AddRectFilled(at(16,14),at(20,40),gold);
     dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(30,12),gold,"PHOTO MODE");
     label(225,20,"FREE CAMERA",11,muted);
-    dl->AddRectFilled(at(520,12),at(634,42),IM_COL32(255,210,36,19),7*s);
+    dl->AddRectFilled(at(520,12),at(634,42),IM_COL32(255,210,36,19));
     char zoom[32];std::snprintf(zoom,sizeof(zoom),"ZOOM  %.2fx",g_zoom.load());
     label(534,20,zoom,14,gold);
     dl->AddLine(at(16,52),at(634,52),rule,1*s);
@@ -372,7 +372,8 @@ void Overlay::OnDraw(ImGuiIO& io) {
     for(int i=0;i<4;i++) {
       const float x=16+156*i;
       prompts::DrawButton(dl,at(x+12.8f,219),12.8f*s,colors[i],letters[i],achievement_ui::HeadlineFont(25*s),1);
-      label(x+34,206,labels[i],13,text);label(x+34,225,keys[i],11,muted);
+      prompts::DrawButtonLabel(dl,at(x+34,219),13*s,text,labels[i],body);
+      label(x+34,231,keys[i],11,muted);
     }
     label(16,248,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);
   }
@@ -381,8 +382,8 @@ void Overlay::OnDraw(ImGuiIO& io) {
     const auto size=body->CalcTextSizeA(14*s,1e6f,wrap,notice.c_str());
     const float toast_height=size.y+24*s;
     const ImVec2 p{origin.x,origin.y-toast_height-(help?10*s:0)};
-    dl->AddRectFilled(p,{p.x+width,p.y+toast_height},IM_COL32(13,18,27,242),8*s);
-    dl->AddRect(p,{p.x+width,p.y+toast_height},IM_COL32(255,210,36,70),8*s,0,1*s);
+    dl->AddRectFilled(p,{p.x+width,p.y+toast_height},IM_COL32(13,18,27,242));
+    dl->AddRect(p,{p.x+width,p.y+toast_height},IM_COL32(255,210,36,70),0,0,1*s);
     dl->AddText(body,14*s,{p.x+16*s,p.y+12*s},gold,notice.c_str(),nullptr,wrap);
   }
 }

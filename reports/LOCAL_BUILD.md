@@ -1,5 +1,16 @@
 # Local build and source distribution
 
+## Menu corners and button-label alignment - 2026-11-04 (unreleased)
+
+Use square corners throughout PC SETTINGS and PHOTO MODE panel rectangles.
+Center action text vertically against each button using emitted glyph geometry,
+including pixel rounding. Preserve fonts, text sizes, compact dimensions and
+background transparency. Built and visually inspected both pages in an isolated
+preview. Restored production sources and rebuilt; checked that private preview
+markers are absent. Deployed experimental build `A15CEE65E51E` to the local test
+installation and uncompressed update. Stable root dist, private ISO ZIP and
+GitHub remain unchanged.
+
 ## PC SETTINGS transparency - 2026-11-04 (unreleased)
 
 Reduced the full-screen veil alpha from 185 to 100 and the dark body from 245

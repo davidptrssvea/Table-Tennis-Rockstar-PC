@@ -2,6 +2,10 @@
 
 ## Unreleased - community Windows integration
 
+- Use square corners in PC SETTINGS and PHOTO MODE, matching the original
+  menus. Vertically center action labels beside controller icons using rendered
+  glyph bounds; retain all text sizes and compact panel dimensions.
+
 - Give the PC SETTINGS dark body subtle transparency and lighten its background
   dimming, retaining opaque text, selection highlight, title and footer.
 
@@ -11,7 +15,7 @@
 - Compact the Photo mode help panel by 29% in area using tighter spacing and
   margins. Preserve all text sizes; reduce its controller icons by exactly 20%.
 
-- Redesign Photo mode help as a dark rounded panel with aligned controller and
+- Redesign Photo mode help as a dark panel with aligned controller and
   keyboard columns, a zoom badge, spaced button actions and wrapped status text.
   Correct Xbox glyph scaling and center the rendered bold letters after pixel rounding; smooth
   PlayStation caps at high DPI. Shared overlay buttons receive the same fix.
