@@ -2,6 +2,12 @@
 
 ## Unreleased - community Windows integration
 
+- Add copy/paste friend invitations with private room generation and matching
+  game/engine build checks. Keep each player's own name. Probe the server's UDP
+  protocol, including DNS names, before online launch and with Test connection.
+  Explain when a LAN address cannot reach another home network. Public hosting
+  remains a separate deployment step; router/firewall settings are unchanged.
+
 - Add opt-out background release checks, launcher update controls, a main-menu
   notification and a PC SETTINGS > UPDATES action. Installation requires approval.
 - Verify signed release metadata and source/engine checksums, rebuild locally from

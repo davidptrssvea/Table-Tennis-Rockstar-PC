@@ -616,3 +616,35 @@ candidate assets are in scratch/updater-release-candidate, with a locally compil
 first-installer candidate. Signing key material stays outside the repository,
 protected by the maintainer's Windows profile; only the public trust key is in
 source. See project/updater/README.md for the release/signing procedure.
+## Easier friend setup - 2026-11-04 (local Windows launcher)
+
+Added Copy invitation / Use invitation, secure random six-character private rooms,
+and Test connection. TT1 invitations contain only selected server, private room
+and the existing game/engine build ID. They fill connection settings while keeping
+the joining player's own name. A mismatched build or malformed code is rejected
+before changing connection settings. No protocol registration, public service,
+router mapping or firewall modification is installed.
+
+The selected relay is checked over UDP before online game launch, with bounded
+DNS lookup and IPv4 retries. The probe is the same non-joining unknown-client
+keepalive used by local server readiness. Offline launch skips it. Failure keeps
+the game from entering an unresponsive online session and explains server/LAN/
+internet requirements. An invitation does not itself create the in-game match.
+
+Validation: six launcher/protocol tests passed (seven discovered, the unchanged
+opt-in controller test skipped). The production launcher compiled under Windows.
+The expanded C# reflection probe covers 2,048 generated room codes, invitation
+round-trip, malformed and invalid fields, mismatched-build settings preservation,
+matching invitation application without changing the player's name, and DNS/UDP
+readiness against a real isolated Python relay and closed/unrelated ports. Relay
+status confirms probes add zero players. The source allowlist test passed.
+Internet/NAT multiplayer and interactive GUI/clipboard review were not performed
+in this session; the existing two-PC play confirmation remains separate.
+
+Copied only the rebuilt launcher into the experimental installation and existing
+uncompressed update; settings and stable desktop launcher were byte-checked
+unchanged. Backup: scratch/internet-launcher-backup-20261104. Game/engine files
+and online build ID 92C1FB9231FA are unchanged. Refreshed the source-only signed
+release candidate/installer; no private ISO ZIP or GitHub release was changed.
+A shared public relay still needs a real host/address and separate deployment.
+The user was asked whether a server/domain is available; no host was assumed.

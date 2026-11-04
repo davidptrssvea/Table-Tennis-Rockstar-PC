@@ -88,6 +88,17 @@ Internet play still needs broader testing. Launching with your own IP/localhost
 checks the local relay and offers to start it if needed, using the selected port.
 A public community release has not been published.
 
+**Friend invitations (development branch):** enter the shared server once, then
+click **Copy invitation**. A private room is generated if needed. Your friend
+pastes the `TT1.` code and clicks **Use invitation**; their own player name stays.
+Different game/engine builds are rejected before settings change. **Test connection**
+checks the actual UDP protocol, and online launch checks again before starting.
+A response confirms relay reachability, not a complete match across both NATs.
+An invitation does not set up internet hosting: local IPs require the same network
+or shared VPN, and internet hosting needs a reachable server. No public server has
+been provisioned and no router/firewall settings are changed automatically. See
+[friend setup](server/README.md).
+
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room
 isolation and rejoining after a server restart. Internet/NAT combinations,

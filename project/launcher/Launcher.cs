@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -302,7 +303,7 @@ namespace TableTennisLauncher
             txtPlayer = NetworkField(contentPanel, "Player name", 15);
             txtRoom = NetworkField(contentPanel, "Private room code (6 characters; empty = public)", 6);
 
-            if (HasCommunityEngine) AddOnlineHelp(contentPanel);
+            if (HasCommunityEngine) { AddFriendTools(contentPanel); AddOnlineHelp(contentPanel); }
             AddUpdateHelp(contentPanel);
 
             // Section: Shortcuts Callout Card
@@ -532,6 +533,95 @@ namespace TableTennisLauncher
                         reply.Length == 7 + reply[6];
                 }
             } catch { return false; }
+        }
+
+        private static string NewPrivateRoom() {
+            const string alphabet="ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+            byte[] value=new byte[1];char[] code=new char[6];
+            using(var random=RandomNumberGenerator.Create()) for(int i=0;i<6;i++) {
+                do {random.GetBytes(value);} while(value[0]>=248);
+                code[i]=alphabet[value[0]%alphabet.Length];
+            }
+            return new string(code);
+        }
+        private static string MakeInvitation(string server,string room,string build) {
+            if(server==null || server.Length>253 || !ValidServer(server) || !ValidRoom(room) || room.Length!=6 || !Regex.IsMatch(build,@"\A[0-9A-F]{12}\z"))
+                throw new ArgumentException("Enter a server and a six-character private room first. A matching game build is required.");
+            return "TT1."+Convert.ToBase64String(Encoding.UTF8.GetBytes(server+"|"+room+"|"+build)).TrimEnd('=').Replace('+','-').Replace('/','_');
+        }
+        private static string[] ReadInvitation(string value) {
+            if(value==null || value.Length>512 || !Regex.IsMatch(value,@"\ATT1\.[A-Za-z0-9_-]+\z"))
+                throw new ArgumentException("Paste the complete TT1 invitation from your friend.");
+            string encoded=value.Substring(4).Replace('-','+').Replace('_','/');
+            encoded=encoded.PadRight((encoded.Length+3)/4*4,'=');
+            string[] fields=new UTF8Encoding(false,true).GetString(Convert.FromBase64String(encoded)).Split('|');
+            if(fields.Length!=3 || !ValidServer(fields[0]) || fields[0].Length>253 || !ValidRoom(fields[1]) || fields[1].Length!=6 ||
+               !Regex.IsMatch(fields[2],@"\A[0-9A-F]{12}\z")) throw new ArgumentException("This invitation is invalid or belongs to a newer format.");
+            return fields;
+        }
+        private static bool SelectedRelayResponds(string server) {
+            if(!ValidServer(server)) return false;
+            string[] parts=server.Split(':');int port=parts.Length==2?int.Parse(parts[1]):27360;
+            try {
+                IPAddress literal;
+                IPAddress[] addresses;
+                if(IPAddress.TryParse(parts[0],out literal)) addresses=new[]{literal};
+                else {
+                    var lookup=Task.Run(()=>Dns.GetHostAddresses(parts[0]));
+                    if(!lookup.Wait(4000)) return false;
+                    addresses=lookup.Result;
+                }
+                int tried=0;
+                foreach(var address in addresses) {
+                    if(address.AddressFamily!=AddressFamily.InterNetwork) continue;
+                    if(++tried>4) break;
+                    for(int attempt=0;attempt<3;attempt++) if(RelayResponds(new IPEndPoint(address,port))) return true;
+                }
+            } catch { }
+            return false;
+        }
+        private string[] ApplyInvitation(string value) {
+            string[] fields=ReadInvitation(value);
+            if(fields[2]!=OnlineBuildId()) throw new InvalidOperationException("Different game builds. Your friend uses "+fields[2]+". Update BOTH PCs to the same build before joining.");
+            txtServer.Text=fields[0];txtRoom.Text=fields[1];chkNetwork.IsChecked=true;
+            return fields;
+        }
+        private void AddFriendTools(StackPanel parent) {
+            parent.Children.Add(new TextBlock {Text="PLAY WITH A FRIEND",Foreground=Brushes.Cyan,FontWeight=FontWeights.Bold,Margin=new Thickness(0,8,0,5)});
+            var invite=NetworkField(parent,"Invitation (paste your friend's TT1 code)",512);
+            var status=new TextBlock {Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,5,0,8)};
+            var actions=new WrapPanel();
+            var create=new Button {Content="Copy invitation",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
+            var join=new Button {Content="Use invitation",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
+            var room=new Button {Content="New private room",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
+            var test=new Button {Content="Test connection",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
+            room.Click+=(sender,args)=>{txtRoom.Text=NewPrivateRoom();status.Text="New room selected. Copy a new invitation and share it with your friend.";};
+            create.Click+=(sender,args)=>{
+                try {
+                    string code=txtRoom.Text.Trim().ToUpperInvariant();
+                    if(code.Length==0) code=NewPrivateRoom();
+                    string text=MakeInvitation(txtServer.Text.Trim(),code,OnlineBuildId());
+                    Clipboard.SetText(text);invite.Text=text;txtRoom.Text=code;chkNetwork.IsChecked=true;
+                    status.Text="Invitation copied. It contains the server address, private room and build ID. Share it with your friend. The server must be running; local IPs only work on the same network or VPN.";
+                } catch(Exception error) {status.Text="Could not create invitation: "+error.Message;}
+            };
+            join.Click+=(sender,args)=>{
+                try {
+                    string[] fields=ApplyInvitation(invite.Text.Trim());
+                    status.Text="Invitation applied. Server: "+fields[0]+". Choose your own player name, then Test connection and Launch Game. In-game: ONLINE > PLAYER MATCH.";
+                } catch(Exception error) {status.Text="Could not use invitation: "+error.Message;}
+            };
+            test.Click+=async (sender,args)=>{
+                string selected=txtServer.Text.Trim();
+                if(!ValidServer(selected)) {status.Text="Enter a server or use your friend's invitation first.";return;}
+                test.IsEnabled=false;status.Text="Testing UDP connection to "+selected+"...";
+                try {bool ready=await Task.Run(()=>SelectedRelayResponds(selected));
+                    status.Text=ready?"The Table Tennis server responds at "+selected+". Both players need the same room and game build. This checks the relay, not a complete match.":
+                        "No Table Tennis UDP response from "+selected+". Start the host's server and check its address/UDP port. A local IP cannot connect across the internet without a shared VPN; internet hosting needs a reachable public server.";
+                } finally {test.IsEnabled=true;}
+            };
+            foreach(var button in new[]{create,join,room,test}) actions.Children.Add(button);
+            parent.Children.Add(actions);parent.Children.Add(status);
         }
 
         private Process StartLocalRelay(int port) {
@@ -922,6 +1012,13 @@ namespace TableTennisLauncher
                 return;
             }
             if (HasCommunityEngine && chkNetwork.IsChecked == true && !await EnsureLocalRelay()) return;
+            if(HasCommunityEngine && chkNetwork.IsChecked==true) {
+                string selected=txtServer.Text.Trim();
+                if(!await Task.Run(()=>SelectedRelayResponds(selected))) {
+                    MessageBox.Show(this,"The Table Tennis server at "+selected+" did not respond over UDP.\n\nAsk the host to start the server and check the address. Internet play needs a reachable public server or a shared VPN; a home-network IP alone is not enough.","Cannot reach online server",MessageBoxButton.OK,MessageBoxImage.Warning);
+                    return;
+                }
+            }
             SaveSettings();
 
             int width = 1920;

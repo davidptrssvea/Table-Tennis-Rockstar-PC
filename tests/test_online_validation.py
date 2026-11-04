@@ -129,11 +129,47 @@ class Probe {
   if(args.Length>1) {
    bool actual=(bool)t.GetMethod("RelayResponds",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{new IPEndPoint(IPAddress.Loopback,int.Parse(args[1]))});
    if(actual!=bool.Parse(args[2])) throw new Exception("Relay readiness mismatch");
+   bool selected=(bool)t.GetMethod("SelectedRelayResponds",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{"localhost:"+args[1]});
+   if(selected!=actual) throw new Exception("Hostname/UDP readiness mismatch");
    return;
+  }
+  var create=t.GetMethod("MakeInvitation",BindingFlags.NonPublic|BindingFlags.Static);
+  var read=t.GetMethod("ReadInvitation",BindingFlags.NonPublic|BindingFlags.Static);
+  var random=t.GetMethod("NewPrivateRoom",BindingFlags.NonPublic|BindingFlags.Static);
+  for(int i=0;i<2048;i++) {
+   string roomCode=(string)random.Invoke(null,null);
+   if(roomCode.Length!=6) throw new Exception("Private room needs six characters");
+   Check("ValidRoom",roomCode,true);
+  }
+  string invitation=(string)create.Invoke(null,new object[]{"relay.example:34567","ABC234","0123456789AB"});
+  string[] decoded=(string[])read.Invoke(null,new object[]{invitation});
+  if(decoded.Length!=3 || decoded[0]!="relay.example:34567" || decoded[1]!="ABC234" || decoded[2]!="0123456789AB")
+   throw new Exception("Invitation lost server/room/build");
+  foreach(string bad in new[]{"",invitation+"\\n","TT2.AAAA","TT1.A","TT1."+new string('A',513)}) {
+   bool rejected=false;try {read.Invoke(null,new object[]{bad});} catch(TargetInvocationException) {rejected=true;}
+   if(!rejected) throw new Exception("Malformed invitation accepted");
+  }
+  foreach(string payload in new[]{"host:0|ABC234|0123456789AB","host|1234|0123456789AB","host|ABC234|wrong","host|ABC234|0123456789AB|extra"}) {
+   string bad="TT1."+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload)).TrimEnd('=').Replace('+','-').Replace('/','_');
+   bool rejected=false;try {read.Invoke(null,new object[]{bad});} catch(TargetInvocationException) {rejected=true;}
+   if(!rejected) throw new Exception("Invalid invitation fields accepted");
   }
   string settings=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"settings.ini");
   System.IO.File.WriteAllText(settings,"achievement_sound=false\\nfuture_key=preserve\\niso_path=C:\\\\Test.iso\\n");
   var window=Activator.CreateInstance(t);
+  string folder=System.IO.Path.GetDirectoryName(args[0]);
+  foreach(string name in new[]{"tabletennis.exe","rexruntime.dll","rexgpu-xenos.dll"})
+   System.IO.File.WriteAllText(System.IO.Path.Combine(folder,name),"owned test fixture "+name);
+  string build=(string)t.GetMethod("OnlineBuildId",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(window,null);
+  var apply=t.GetMethod("ApplyInvitation",BindingFlags.NonPublic|BindingFlags.Instance);
+  var serverBox=(System.Windows.Controls.TextBox)t.GetField("txtServer",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(window);
+  var playerBox=(System.Windows.Controls.TextBox)t.GetField("txtPlayer",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(window);
+  string player=playerBox.Text,oldServer=serverBox.Text;
+  bool mismatch=false;try {apply.Invoke(window,new object[]{invitation});} catch(TargetInvocationException) {mismatch=true;}
+  if(!mismatch || serverBox.Text!=oldServer) throw new Exception("Mismatched invite changed settings");
+  string matching=(string)create.Invoke(null,new object[]{"relay.example:34567","ABC234",build});
+  apply.Invoke(window,new object[]{matching});
+  if(serverBox.Text!="relay.example:34567" || playerBox.Text!=player) throw new Exception("Invitation changed player name or lost server");
   t.GetMethod("SaveSettings",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(window,null);
   string saved=System.IO.File.ReadAllText(settings);
   if(!saved.Contains("achievement_sound=false") || !saved.Contains("future_key=preserve"))
