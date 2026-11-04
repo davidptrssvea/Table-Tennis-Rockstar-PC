@@ -122,6 +122,7 @@ class Probe {
   bool actual=(bool)t.GetMethod(method,BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{value});
   if(actual!=expected) throw new Exception(method+" rejected/accepted incorrectly: "+value);
  }
+ [STAThread]
  static void Main(string[] args) {
   t=Assembly.LoadFrom(args[0]).GetType("TableTennisLauncher.MainWindow");
   if(args.Length>1) {
@@ -129,6 +130,14 @@ class Probe {
    if(actual!=bool.Parse(args[2])) throw new Exception("Relay readiness mismatch");
    return;
   }
+  string settings=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"settings.ini");
+  System.IO.File.WriteAllText(settings,"achievement_sound=false\\nfuture_key=preserve\\niso_path=C:\\\\Test.iso\\n");
+  var window=Activator.CreateInstance(t);
+  t.GetMethod("SaveSettings",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(window,null);
+  string saved=System.IO.File.ReadAllText(settings);
+  if(!saved.Contains("achievement_sound=false") || !saved.Contains("future_key=preserve"))
+   throw new Exception("Launcher lost in-game/unknown settings");
+  ((System.Windows.Window)window).Close();
   var local=t.GetMethod("LocalServerEndpoint",BindingFlags.NonPublic|BindingFlags.Static);
   foreach(string value in new[]{"localhost:34567","127.0.0.1:34567",Environment.MachineName+":34567"}) {
    var endpoint=(IPEndPoint)local.Invoke(null,new object[]{value});

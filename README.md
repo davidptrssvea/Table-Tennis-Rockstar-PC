@@ -34,6 +34,12 @@ commit `7bff91c561fa0e424562c6d851b9008e9fc9511e`. Thanks to **ThisIsAkill**!
 The [MIT notice](licenses/Table-Tennis-Linux/NOTICE.txt) is retained; SDK changes
 retain ReXGlue's BSD license. These features are not in the v1.1.2 download above.
 
+- **PC SETTINGS:** open **OPTIONS > PC SETTINGS** from the main menu or pause
+  menu. Change fullscreen, FPS/frame-time window, button icons and achievement
+  sound immediately. Resolution (including ultrawide), anti-aliasing and output
+  filtering are marked **AFTER RESTART**. Use D-pad/stick to navigate/change,
+  A to change and B to save/back; keyboard arrows, Enter and Escape also work.
+  Settings share the launcher's `settings.ini`; ISO/network/unknown keys survive.
 - **Achievements:** styled unlock notifications and a list of all 29 achievements,
   opened from **EXTRAS > ACHIEVEMENTS**, **F7**, or by holding **View/Back** for
   0.8 seconds. Scroll with the D-pad/stick, mouse wheel or arrow keys; shoulders

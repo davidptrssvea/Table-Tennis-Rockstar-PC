@@ -7,6 +7,7 @@
 #include "offline_menu_device.h"
 #include "intro_skip.h"
 #include "pc_features.h"
+#include "pc_settings.h"
 #include "achievement_ui.h"
 #include "button_prompts.h"
 #include "system_link.h"
@@ -147,6 +148,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   ~TabletennisApp() override {
+    tabletennis::pc_settings::SetOpenCallback({});
     tabletennis::pc::SetAchievementsToggle({});
     tabletennis::pc::SetWindow(nullptr);
     tabletennis::intro::Uninstall();
@@ -166,7 +168,7 @@ class TabletennisApp : public rex::ReXApp {
   }
 
   void OnKeyDown(rex::ui::KeyEvent& event) override {
-    if (!tabletennis::achievement_ui::HandleKey(event)) rex::ui::ProcessKeyEvent(event);
+    if (!tabletennis::pc_settings::HandleKey(event) && !tabletennis::achievement_ui::HandleKey(event)) rex::ui::ProcessKeyEvent(event);
   }
 
  protected:
@@ -210,7 +212,7 @@ class TabletennisApp : public rex::ReXApp {
           auto value = line.substr(separator + 1);
           while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) value.pop_back();
           std::string flag;
-          if (key == "button_prompts") flag = key;
+          if (key == "button_prompts" || key == "achievement_sound" || key == "show_fps") flag = key;
 #if defined(TT_COMMUNITY_NETWORK)
           else if (key == "system_link" && (value == "true" || value == "false")) flag = key;
           else if (key == "online_server" || key == "room_code") flag = key;
@@ -408,6 +410,11 @@ class TabletennisApp : public rex::ReXApp {
         if(!window()) return;
         rex::ui::KeyEvent event(window(),rex::ui::VirtualKey::kF7,1,false,false,false,false,false);
         rex::ui::ProcessKeyEvent(event);
+      });
+    });
+    tabletennis::pc_settings::SetOpenCallback([this] {
+      app_context().CallInUIThreadDeferred([this] {
+        if(window()) new tabletennis::pc_settings::SettingsPage(imgui_drawer(),window());
       });
     });
     tabletennis::prompts::Init(runtime()->memory(),runtime()->graphics_system());

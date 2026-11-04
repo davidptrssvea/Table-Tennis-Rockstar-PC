@@ -1,5 +1,6 @@
 #include "generated/default/tabletennis_init.h"
 #include "pc_features.h"
+#include "pc_settings.h"
 #include "system_link.h"
 #include "screen_layout.h"
 #include <atomic>
@@ -78,6 +79,7 @@ void Scissor(PPCContext& ctx) {
 }
 void CheckQuit(PPCContext& ctx, uint8_t* base, uint32_t movie) {
   if (!movie || quit_posted.load()) return;
+  tabletennis::pc_settings::PollFrontend(ctx,base,movie);
 #if defined(TT_COMMUNITY_NETWORK)
   tabletennis::lan::PollFrontend(ctx,base,movie);
   return; // The extended menu has three distinct state-91 rows, even offline.

@@ -16,6 +16,8 @@ FIXED_FILES = {
     'project/src/frame_pacer.cpp', 'project/src/frame_pacer.h',
     'project/src/frame_schedule.h', 'tests/frame_pacing_test.cpp',
     'project/src/pc_features.cpp', 'project/src/pc_features.h',
+    'project/src/pc_settings.cpp', 'project/src/pc_settings.h', 'project/src/settings_store.h',
+    'project/tools/menu_settings.py',
     'project/src/achievement_ui.cpp', 'project/src/achievement_ui.h',
     'project/src/button_prompts.cpp', 'project/src/button_prompts.h', 'project/src/button_prompt_art.inc',
     'project/src/system_link.cpp', 'project/src/system_link.h',

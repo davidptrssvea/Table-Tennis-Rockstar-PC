@@ -12,7 +12,7 @@ PATCHED_MOVIE = 'cd6ad6d72bd9e4642cb529478ae7476e0e3215aba8a443250409e837a776953
 ONLINE_MOVIE = 'b8600c82885cf512ae81ca9e8db7538138ea71f34d5a6575542254cb910311a2'
 
 
-def patch(path, online=False):
+def _patch_base(path, online=False):
     path = Path(path)
     archive = bytearray(path.read_bytes())
     if archive[:4] != b'RPF0':
@@ -85,3 +85,83 @@ def patch(path, online=False):
     temp.write_bytes(archive)
     temp.replace(path)
     print('Created and verified offline menu and intro timing patches locally.', flush=True)
+
+
+ORIGINAL_PAUSE_MOVIE = '7b6f9e70c58adcea5974681aad4dd2fa7915dd6f54015efdaaf888818ba0861d'
+SETTINGS_PAUSE_MOVIE = 'ca15a4b5931015c5547ee019ee59febb82bf62b7a547d7c0353f104d3db7d3d4'
+SETTINGS_OFFLINE_MOVIE = '4595b6d6664e92a53586525e246c610314c85acf54c4fb686cacce2436151fc6'
+SETTINGS_ONLINE_MOVIE = '4b761e4703365822f8735111852925147f5ea4c810627dfb8e64a4bf9796e42e'
+
+
+def _movies(archive):
+    if archive[:4] != b'RPF0':
+        raise ValueError('Not an RPF0 menu archive')
+    toc, count = struct.unpack_from('<II', archive, 4)
+    names = toc + count * 16
+    if not 0 < count < 100000 or toc < 12 or names >= len(archive):
+        raise ValueError('Invalid archive table')
+    entries = []
+    for i in range(count):
+        entry = toc + i * 16
+        name, offset, packed, raw_size = struct.unpack_from('<4I', archive, entry)
+        if name & 0x80000000:
+            continue
+        end = archive.index(0, names + name)
+        if offset + packed > len(archive):
+            raise ValueError('Archive entry outside file')
+        entries.append((archive[names+name:end], entry, offset, packed, raw_size))
+    result = {}
+    for name in (b'pongui_001.xeck', b'pongpause_001.xeck'):
+        matches = [e for e in entries if e[0] == name]
+        if len(matches) != 1:
+            raise ValueError('Expected one frontend/pause menu')
+        _, entry, offset, packed, size = matches[0]
+        if size > 16 * 1024 * 1024:
+            raise ValueError('Unexpected menu size')
+        decoder = zlib.decompressobj(-15)
+        movie = bytearray(decoder.decompress(archive[offset:offset+packed], size+1))
+        if len(movie) != size or not decoder.eof:
+            raise ValueError('Invalid menu compression')
+        limit = min((e[2] for e in entries if e[2] > offset), default=len(archive))
+        result[name] = (movie, entry, offset, limit)
+    return result
+
+
+def patch(path, online=False):
+    from menu_settings import _add_pc_settings, _add_pause_pc_settings
+    path = Path(path)
+    archive = bytearray(path.read_bytes())
+    movies = _movies(archive)
+    frontend = movies[b'pongui_001.xeck'][0]
+    pause = movies[b'pongpause_001.xeck'][0]
+    expected = SETTINGS_ONLINE_MOVIE if online else SETTINGS_OFFLINE_MOVIE
+    front_hash, pause_hash = (hashlib.sha256(m).hexdigest() for m in (frontend,pause))
+    if front_hash == expected and pause_hash == SETTINGS_PAUSE_MOVIE:
+        print('Frontend and pause PC SETTINGS patches already verified.', flush=True)
+        return
+    base_expected = ONLINE_MOVIE if online else PATCHED_MOVIE
+    if front_hash not in (ORIGINAL_MOVIE, base_expected) or pause_hash != ORIGINAL_PAUSE_MOVIE:
+        raise ValueError('Unsupported frontend/pause archive; no changes made')
+    temporary = path.with_suffix('.pc-working')
+    try:
+        temporary.write_bytes(archive)
+        _patch_base(temporary, online)
+        archive = bytearray(temporary.read_bytes())
+        movies = _movies(archive)
+        for name, apply, digest in ((b'pongui_001.xeck',_add_pc_settings,expected),
+                                   (b'pongpause_001.xeck',_add_pause_pc_settings,SETTINGS_PAUSE_MOVIE)):
+            movie, entry, offset, limit = movies[name]
+            apply(movie)
+            if hashlib.sha256(movie).hexdigest() != digest:
+                raise ValueError('PC SETTINGS movie verification failed')
+            compressor = zlib.compressobj(9,zlib.DEFLATED,-15)
+            packed = compressor.compress(movie)+compressor.flush()
+            if offset+len(packed)>limit:
+                raise ValueError('PC SETTINGS movie exceeds archive slot')
+            archive[offset:limit] = packed+bytes(limit-offset-len(packed))
+            struct.pack_into('<I',archive,entry+8,len(packed))
+        temporary.write_bytes(archive)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    print('Created verified PC SETTINGS entries in frontend and pause OPTIONS.',flush=True)

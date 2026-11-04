@@ -1,3 +1,4 @@
+#include "settings_store.h"
 #include "screen_layout.h"
 #include <cassert>
 #include <cmath>
@@ -22,4 +23,17 @@ int main() {
   assert(clip.left==clip.right && clip.left==1120);
   clip=Intersect({-200,0,-10,100},bounds);
   assert(clip.left==clip.right && clip.left==160);
+  {
+    using namespace tabletennis::settings_store;
+    const std::string original="# keep comment\r\niso_path=D:\\Games\\Table=Test.iso\r\nonline_server=192.0.2.1:27360\r\nshow_fps=false\r\nshow_fps=true\r\nfuture_key=keep\r\n";
+    auto merged=Merge(original,{{"show_fps","false"},{"achievement_sound","false"}});
+    auto values=Parse(merged);
+    assert(values.at("show_fps")=="false");
+    assert(values.at("achievement_sound")=="false");
+    assert(values.at("iso_path")=="D:\\Games\\Table=Test.iso");
+    assert(values.at("online_server")=="192.0.2.1:27360");
+    assert(values.at("future_key")=="keep");
+    assert(merged.find("# keep comment\r\n")!=std::string::npos);
+    assert(Merge(merged,{{"show_fps","false"},{"achievement_sound","false"}})==merged);
+  }
 }

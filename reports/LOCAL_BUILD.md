@@ -440,3 +440,54 @@ The late-frame recovery change above is packaged as v1.1.2 at the user's request
 The production game code is unchanged from the candidate that passed all 12
 checks. The telemetry experiment remains excluded. The installer version and
 public download links are updated, with the same 44-file public source allowlist.
+
+
+## Windows PC SETTINGS - 2026-11-04 (unreleased)
+
+Added OPTIONS > PC SETTINGS in the front-end and in-match pause OPTIONS, using
+ThisIsAkill's MIT AVM1 assembler edits and guest flag polling. The Windows page
+uses the shared achievement fonts and the game's blue/yellow/dark style, with
+D-pad/stick/A/B, keyboard arrows/Enter/Escape and mouse row selection.
+
+Supported settings: resolution (including the launcher's three ultrawide sizes),
+fullscreen, anti-aliasing, output filter, separate FPS/frame-time window, button
+prompts and achievement sound. Resolution/AA/filter explicitly require restart
+through the launcher. Fullscreen, timing window, prompts and sound apply live.
+The 60 FPS scheduler is retained; VSync/brightness/haptics/updates are not exposed
+as unsupported choices. The ImGui page exists only while open, and closing it
+returns presentation to game-only work. Guest input is swallowed while open and
+held buttons are drained until release on exit.
+
+Saving merges known page fields into settings.ini, retaining comments, ISO paths,
+network settings and unknown keys. A temporary file is checked/closed and then
+replaced atomically with MoveFileExW; a failure keeps the page open with an error.
+The launcher also preserves in-game/unknown keys when saving its own controls.
+
+Validation:
+- Both offline/online front-end movie hashes and the pause movie hash are checked;
+  both complete archive variants were generated from verified local disc data
+  and passed a second idempotent patch pass. Unsupported input fails closed.
+- The 27-test suite passed 26 tests with the runtime test skipped in that run;
+  the runtime test then passed separately with all three production ISO boot
+  subcases enabled. The expanded six launcher/protocol tests passed after adding
+  the launcher's preservation regression. Native layout checks also exercise
+  settings merge/idempotence, duplicate keys and preservation of comments/paths.
+- All 57 generated override registrations and all 23 native-edit hashes pass.
+- A private virtual-pad game entered real front-end OPTIONS > PC SETTINGS,
+  changed resolution to 1440p, enabled FPS, changed prompts to PlayStation and
+  disabled achievement sound. Saved values were verified; ISO/server/player/room
+  and an unknown sentinel key were retained. Logs confirm page open/save/close
+  and subsequent 60 FPS game-only presentation. The private profile is isolated.
+- The game subsequently loaded an Exhibition match and entered pongPauseState
+  without a fatal. Opening the new pause OPTIONS row has not yet been verified.
+- Visual layout review is still pending: Windows Security's firewall permission
+  dialog obstructs the test window. No permission was answered automatically and
+  no security settings were changed. The user was asked to dismiss it.
+
+The production EXE is separately rebuilt with the original intro source and
+checked to exclude TT_TEST_CONTROLLER_FILE. Its matched online build ID is
+2B57B523CC4A. Only the experimental local installation and the uncompressed
+private update directory were refreshed (EXE, launcher, frontend/pause archive,
+credit notice). Existing settings were preserved and prior files backed up.
+The normal desktop shortcut's stable dist, the private ZIP and public release
+remain unchanged. No game/archive/generated function is added to public source.

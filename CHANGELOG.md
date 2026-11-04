@@ -2,6 +2,13 @@
 
 ## Unreleased - community Windows integration
 
+- Add OPTIONS > PC SETTINGS to the main and pause menus. Fullscreen, timing
+  window, button icons and achievement sound apply immediately; resolution,
+  anti-aliasing and output filter are clearly marked as requiring a restart.
+  Capture page input, drain held buttons on exit, and detach the overlay on close.
+  Save atomically while preserving ISO/network settings; the launcher retains
+  in-game and unknown settings when it saves too.
+
 - Before launching online with this PC's IP/localhost, probe the relay's UDP
   protocol. If it does not respond, offer to start the bundled server on the
   selected port and wait for readiness; keep the game closed if declined or

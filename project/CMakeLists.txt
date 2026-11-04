@@ -17,6 +17,7 @@ set(TABLETENNIS_SOURCES
     src/frame_pacer.cpp
     src/stats_window.cpp
     src/pc_features.cpp
+    src/pc_settings.cpp
     src/achievement_ui.cpp
     src/button_prompts.cpp
 )

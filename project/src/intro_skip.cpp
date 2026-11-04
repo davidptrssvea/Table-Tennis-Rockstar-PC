@@ -1,5 +1,6 @@
 #include "generated/default/tabletennis_init.h"
 #include "intro_skip.h"
+#include "pc_settings.h"
 #include "achievement_ui.h"
 #include "button_prompts.h"
 #include "system_link.h"
@@ -211,7 +212,7 @@ void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) 
       REX_LOAD_U16(state+4),REX_LOAD_U8(state+6),REX_LOAD_U8(state+7),
       int16_t(REX_LOAD_U16(state+8)),int16_t(REX_LOAD_U16(state+10)),
       int16_t(REX_LOAD_U16(state+12)),int16_t(REX_LOAD_U16(state+14))};
-    if (achievement_ui::FilterInput(user,pad)) {
+    if (tabletennis::pc_settings::FilterInput(user,pad) || achievement_ui::FilterInput(user,pad)) {
       REX_STORE_U16(state+4,pad.buttons);REX_STORE_U8(state+6,pad.left_trigger);
       REX_STORE_U8(state+7,pad.right_trigger);REX_STORE_U16(state+8,uint16_t(pad.thumb_lx));
       REX_STORE_U16(state+10,uint16_t(pad.thumb_ly));REX_STORE_U16(state+12,uint16_t(pad.thumb_rx));

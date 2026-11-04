@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -784,7 +785,7 @@ namespace TableTennisLauncher
 
             try
             {
-                File.WriteAllLines(configFile, new string[]
+                var lines = new List<string>(new string[]
                 {
                     "iso_path=" + iso,
                     "resolution=" + res,
@@ -798,6 +799,13 @@ namespace TableTennisLauncher
                     "online_server=" + txtServer.Text.Trim(), "player_name=" + txtPlayer.Text.Trim(),
                     "room_code=" + txtRoom.Text.Trim().ToUpperInvariant()
                 });
+                var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var line in lines) keys.Add(line.Split('=')[0]);
+                if (File.Exists(configFile)) foreach (var line in File.ReadAllLines(configFile)) {
+                    int equal = line.IndexOf('=');
+                    if (equal < 0 || !keys.Contains(line.Substring(0,equal).Trim())) lines.Add(line);
+                }
+                File.WriteAllLines(configFile, lines);
             }
             catch { }
         }
