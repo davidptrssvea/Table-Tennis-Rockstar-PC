@@ -156,6 +156,7 @@ class Probe {
   }
   string settings=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"settings.ini");
   System.IO.File.WriteAllText(settings,"achievement_sound=false\\nfuture_key=preserve\\niso_path=C:\\\\Test.iso\\n");
+  System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"community-engine.json"),"{}");
   var window=Activator.CreateInstance(t);
   string folder=System.IO.Path.GetDirectoryName(args[0]);
   foreach(string name in new[]{"tabletennis.exe","rexruntime.dll","rexgpu-xenos.dll"})
@@ -198,7 +199,7 @@ class Probe {
             common = [str(csc), '/nologo', '/optimize', '/lib:' + str(csc.parent / 'WPF'),
                       '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll']
             subprocess.run(common + ['/target:winexe', '/out:' + str(launcher),
-                                      str(ROOT / 'project/launcher/Launcher.cs')], check=True)
+                                      str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs')], check=True)
             executable = folder / 'probe.exe'
             subprocess.run(common + ['/target:exe', '/out:' + str(executable), str(probe)], check=True)
             subprocess.run([str(executable), str(launcher)], check=True, timeout=10)

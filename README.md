@@ -79,6 +79,9 @@ open while playing. The next official community release must include these tools
 that release remains pending multiplayer testing. The existing private test ZIP
 has not been rebuilt with this launcher change.
 
+These console controls are now under Advanced. The simpler **Host & copy
+invitation** flow below runs its server in the background and manages its lifetime.
+
 The launcher now shows an **Online build ID** derived from the game and engine
 files; compare it on both PCs before reporting a multiplayer failure. **Open game
 logs** opens the folder needed for the client crash report. See the
@@ -88,16 +91,20 @@ Internet play still needs broader testing. Launching with your own IP/localhost
 checks the local relay and offers to start it if needed, using the selected port.
 A public community release has not been published.
 
-**Friend invitations (development branch):** enter the shared server once, then
-click **Copy invitation**. A private room is generated if needed. Your friend
-pastes the `TT1.` code and clicks **Use invitation**; their own player name stays.
-Different game/engine builds are rejected before settings change. **Test connection**
-checks the actual UDP protocol, and online launch checks again before starting.
-A response confirms relay reachability, not a complete match across both NATs.
-An invitation does not set up internet hosting: local IPs require the same network
-or shared VPN, and internet hosting needs a reachable server. No public server has
-been provisioned and no router/firewall settings are changed automatically. See
-[friend setup](server/README.md).
+**Host a friend (development branch):** choose **Host & copy invitation**. The
+launcher starts your private server in the background, selects a private room and
+copies the invitation. Your friend pastes it and chooses **Join invitation**, then
+both launch the game. Their name stays their own; different builds are rejected.
+Server/room fields and older manual controls are under **Advanced network settings**.
+
+Use **Same network / shared VPN** at home or with your VPN adapter selected.
+For separate internet connections, **Internet - automatic router setup (UPnP)**
+can request the host's game port after the host ticks its permission box. Manual
+forwarding is also supported. No shared game service or third-party IP lookup is
+used, and Windows firewall/security settings are not changed. Routers without
+working UPnP, double NAT and CGNAT can require a shared VPN or manual setup.
+**Join invitation** checks the actual UDP connection; it cannot guarantee a complete
+match across every NAT. See [host/join setup](server/README.md).
 
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room

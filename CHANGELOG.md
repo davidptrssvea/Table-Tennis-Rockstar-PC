@@ -2,6 +2,13 @@
 
 ## Unreleased - community Windows integration
 
+- Add player-hosted sessions: Host & copy invitation starts a private background
+  relay; Join invitation applies and tests it. Put manual connection fields under
+  Advanced. Stop the owned relay when the host game exits or Stop hosting is used.
+- Offer explicit opt-in Windows UPnP router setup, owned-rule cleanup/recovery,
+  manual forwarding, and LAN/VPN adapter selection. No shared public game server,
+  account, external IP lookup or Windows firewall modification is required.
+
 - Add copy/paste friend invitations with private room generation and matching
   game/engine build checks. Keep each player's own name. Probe the server's UDP
   protocol, including DNS names, before online launch and with Test connection.

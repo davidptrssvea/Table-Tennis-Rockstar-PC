@@ -648,3 +648,54 @@ and online build ID 92C1FB9231FA are unchanged. Refreshed the source-only signed
 release candidate/installer; no private ISO ZIP or GitHub release was changed.
 A shared public relay still needs a real host/address and separate deployment.
 The user was asked whether a server/domain is available; no host was assumed.
+## Player-owned Host/Join flow - 2026-11-04
+
+The user explicitly ruled out operating a shared public server. The Windows
+launcher now offers Host & copy invitation / Join invitation / Stop hosting.
+Host starts the installed Python relay in a hidden, installation-specific helper,
+selects a private room and copies a build-checked invitation. Join applies it and
+checks UDP reachability while retaining the friend's name. Main server/room fields
+and old console tools moved under Advanced; optional tools are collapsed.
+
+Modes: selected LAN/shared-VPN adapter; explicit checkbox permission for Windows
+UPnP router setup; or manually forwarded public IPv4:port. UPnP uses the built-in
+Windows NAT API without a remote IP-lookup service. Only UDP 27360 is requested.
+Foreign port mappings are refused, never overwritten/deleted. The host's own game
+uses its local IP; invitations and later Copy invitation use the external mapped
+address, avoiding dependence on router hairpin NAT. Windows firewall/security
+settings are never changed and permission dialogs remain the player's action.
+
+The helper tracks the specific launched game PID, creation time and executable
+path; it stops its own relay after that game exits, Stop hosting, relay failure,
+or 30 minutes without a game launch. Closing the launcher alone leaves it running.
+It journals an owned UPnP rule before creating it and tries to remove only that
+same port/client/description on exit. Identity includes this Windows machine and
+installation. Next hosting retries interrupted cleanup. LAN/manual hosting can
+continue with a warning if an old router is unreachable. Forced process/OS exit
+can leave a static rule until retry/manual cleanup; no guaranteed lease expiry is
+claimed. Logs/status live under .updates/hosting/<session>; no game assets needed.
+
+Validation:
+- Full suite: 57 tests passed with SDK/network/controller/native/ISO runtime
+  checks enabled. Final targeted host tests and six launcher/protocol checks
+  passed after the last changes (the unchanged opt-in controller case was skipped
+  in that targeted run, included in the full run).
+- Real loopback relay started through the production supervisor and bundled
+  embedded Python, answered UDP, rejected duplicate hosts without altering the
+  first session, stopped on request, and stopped when an owned dummy game exited.
+- Fake-router tests cover public/private/CGNAT address classification, foreign
+  port conflict, ownership-sensitive deletion, own-rule reuse, and cleanup of an
+  owned mapping rejected for a private external address. Address/journal tests
+  verify external invitations while keeping the host connection local.
+- Windows UI inspected on screen: LAN/VPN panel, selected Wi-Fi adapter, invitation
+  field and three primary buttons fit; advanced tools start collapsed and the
+  fixed Launch Game footer remains available. The test launcher is left open.
+- No real router mapping was performed during automated/manual review. Physical
+  UPnP devices, double NAT/CGNAT and a real match on separate internet connections
+  still need player testing. No external game service was provisioned.
+
+Rebuilt launcher installed into scratch/community-feature-test/dist and the
+existing uncompressed update; settings and stable desktop launcher were checked
+unchanged. Prior test launcher: scratch/player-host-backup-20261104. Game/engine
+files and build ID 92C1FB9231FA unchanged. Source-only signed candidate/first
+installer refreshed locally. Private ISO ZIP and published GitHub release unchanged.
