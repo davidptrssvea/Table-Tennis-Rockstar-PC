@@ -1,5 +1,17 @@
 # Local build and source distribution
 
+## Xbox button font correction - 2026-11-04 (unreleased)
+
+Replaced the hand-drawn lettering after user feedback with normal Arial Bold
+from the existing Windows UI font fallback. Match ImGui RenderText's size /
+baked-size scale when centering glyph bounds: the fixed atlas may return a bake
+at a different size from the requested text. Photo mode now passes the shared
+bold font explicitly, as PC SETTINGS and achievements already do. PlayStation
+artwork and the instruction panel remain unchanged. Built and visually checked
+all four Xbox letters in the isolated 1920x1080 preview; they are centered and
+use conventional typography. Restored production Init and rebuilt without the
+preview activation. Experimental build ID: `D42766EB2C9F`. No publication/private ZIP.
+
 ## Photo help panel and button artwork - 2026-11-04 (unreleased)
 
 Replaced the loose Photo mode instructions with a rounded dark panel, two

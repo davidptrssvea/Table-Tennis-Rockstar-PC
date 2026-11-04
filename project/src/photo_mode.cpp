@@ -371,7 +371,7 @@ void Overlay::OnDraw(ImGuiIO& io) {
     const unsigned colors[]={IM_COL32(79,185,24,255),IM_COL32(215,42,42,255),IM_COL32(42,100,225,255),IM_COL32(235,190,24,255)};
     for(int i=0;i<4;i++) {
       const float x=22+184*i;
-      prompts::DrawButton(dl,at(x+16,270),16*s,colors[i],letters[i],nullptr,1);
+      prompts::DrawButton(dl,at(x+16,270),16*s,colors[i],letters[i],achievement_ui::HeadlineFont(25*s),1);
       label(x+42,257,labels[i],13,text);label(x+42,278,keys[i],11,muted);
     }
     label(22,301,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);

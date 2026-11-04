@@ -352,30 +352,17 @@ void DrawButton(ImDrawList* dl,const ImVec2& center,float radius,unsigned int fi
   dl->PathStroke(IM_COL32(255,255,255,opacity(145)),0,std::max(1.f,radius*.055f));
   dl->AddEllipseFilled({center.x,center.y-radius*.43f},{radius*.48f,radius*.15f},
                        IM_COL32(255,255,255,opacity(38)),0,48);
-  // Vector lettering stays centered at every DPI and avoids mixing glyph
-  // metrics from a dynamic font bake with the renderer's fixed font atlas.
-  (void)font;
-  const ImU32 ink=IM_COL32(12,19,12,opacity(255));
-  const float stroke=radius*.15f;
-  auto point=[&](float x,float y) {return ImVec2(center.x+x*radius,center.y+y*radius);};
-  auto line=[&](float x1,float y1,float x2,float y2) {
-    const auto a=point(x1,y1),b=point(x2,y2);
-    dl->AddLine(a,b,ink,stroke);
-    dl->AddCircleFilled(a,stroke*.5f,ink,16);dl->AddCircleFilled(b,stroke*.5f,ink,16);
-  };
-  switch(letter?letter[0]:0) {
-    case 'A':
-      line(-.35f,.43f,0,-.46f);line(0,-.46f,.35f,.43f);line(-.22f,.13f,.22f,.13f);break;
-    case 'B':
-      line(-.27f,-.46f,-.27f,.46f);
-      dl->PathLineTo(point(-.27f,-.46f));
-      dl->PathBezierCubicCurveTo(point(.47f,-.50f),point(.47f,.01f),point(-.27f,-.01f));
-      dl->PathBezierCubicCurveTo(point(.52f,-.04f),point(.52f,.51f),point(-.27f,.46f));
-      dl->PathStroke(ink,0,stroke);break;
-    case 'X':line(-.31f,-.43f,.31f,.43f);line(-.31f,.43f,.31f,-.43f);break;
-    case 'Y':line(-.32f,-.43f,0,0);line(.32f,-.43f,0,0);line(0,0,0,.45f);break;
-    default:break;
-  }
+  if(!letter || !letter[0]) return;
+  const float px=radius*1.55f;
+  if(!font) font=ImGui::GetFont();
+  auto* baked=font->GetFontBaked(px);
+  const auto* glyph=baked->FindGlyph(ImWchar(letter[0]));
+  // A fixed-atlas renderer returns its existing bake, not necessarily px.
+  // Match RenderText's scale when converting visible glyph bounds to pixels.
+  const float scale=px/baked->Size;
+  const ImVec2 at{center.x-(glyph->X0+glyph->X1)*scale*.5f,
+                  center.y-(glyph->Y0+glyph->Y1)*scale*.5f};
+  dl->AddText(font,px,at,IM_COL32(12,19,12,opacity(255)),letter);
 }
 
 const char* Shoulder(bool right) {
