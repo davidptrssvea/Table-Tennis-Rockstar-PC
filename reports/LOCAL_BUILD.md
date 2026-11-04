@@ -1,5 +1,16 @@
 # Local build and source distribution
 
+## PC SETTINGS selection band - 2026-11-04 (unreleased)
+
+Replace the 40-unit opaque highlight with the rendered capital-letter height
+plus 5 units of padding per side vertically. Center on the capital bounds at
+the actual font bake scale and pixel-rounded text origin. Increase horizontal
+inset from 12 to 20 units; use alpha 155/255 (61% opacity). Text size and row
+spacing stay unchanged. Built and visually checked in a separate preview;
+restored production sources and verified preview markers absent. Deployed
+experimental build `1AA509A54594` to the local test installation and uncompressed
+update. Private ISO ZIP, stable root dist and GitHub remain unchanged.
+
 ## Launcher scrollbar spacing - 2026-11-04 (unreleased)
 
 Reserve 30 device-independent pixels on the content panel right edge, inside

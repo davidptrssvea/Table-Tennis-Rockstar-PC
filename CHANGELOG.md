@@ -2,6 +2,9 @@
 
 ## Unreleased - community Windows integration
 
+- Slim the PC SETTINGS selection band, center it on visible capital-letter
+  bounds, inset its sides and use 61% opacity. Preserve text and row spacing.
+
 - Reserve a 30-DIP gutter between launcher controls and its scrollbar; scale
   the spacing with Windows DPI and constrain content to the viewport width.
 

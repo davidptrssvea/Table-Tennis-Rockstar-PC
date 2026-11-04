@@ -213,7 +213,16 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   for(size_t i=0;i<state_->rows.size();++i) {
     const auto& row=state_->rows[i];const float yy=y+84*s+i*40*s;
     const bool selected=int(i)==state_->row;
-    if(selected) dl->AddRectFilled({x+12*s,yy-3*s},{r-12*s,yy+37*s},IM_COL32(47,49,51,255));
+    if(selected) {
+      // Center a slim band on the visible capital letters, not the font line box.
+      auto* baked=achievement_ui::HeadlineFont(23*s)->GetFontBaked(23*s);
+      const auto* cap=baked->FindGlyph(ImWchar('H'));
+      const float scale=23*s/baked->Size;
+      const float center=std::floor(yy)+(cap->Y0+cap->Y1)*scale*.5f;
+      const float half_height=(cap->Y1-cap->Y0)*scale*.5f+5*s;
+      dl->AddRectFilled({x+20*s,center-half_height},{r-20*s,center+half_height},
+                        IM_COL32(75,78,82,155));
+    }
     const auto color=selected?IM_COL32(255,209,0,255):IM_COL32(205,207,211,255);
     text(23*s,x+28*s,yy,color,row.label);
     auto label=std::string(row.labels[row.selected])+(row.restart?" *":"");
