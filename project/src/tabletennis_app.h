@@ -448,6 +448,8 @@ class TabletennisApp : public rex::ReXApp {
     });
     tabletennis::prompts::Init(runtime()->memory(),runtime()->graphics_system());
     if (window()) {
+      window()->SetCursorAutoHideDelayMs(2000);
+      window()->SetCursorVisibility(rex::ui::Window::CursorVisibility::kAutoHidden);
       tabletennis::pc::SetWindow(window()->GetNativeWindowHandle());
       tabletennis::pc::SetSurfaceSize(window()->GetActualPhysicalWidth(),window()->GetActualPhysicalHeight());
     }

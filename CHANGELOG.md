@@ -2,6 +2,9 @@
 
 ## Unreleased - community Windows integration
 
+- Automatically hide the game-window mouse cursor after two seconds without
+  motion; reveal it immediately when the mouse moves, using the SDK cursor API.
+
 - Compact the Photo mode help panel by 29% in area using tighter spacing and
   margins. Preserve all text sizes; reduce its controller icons by exactly 20%.
 

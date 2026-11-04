@@ -43,6 +43,9 @@ The ISO is checked before installing large compiler components and is always ope
 
 ### Community features (development branch)
 
+The mouse cursor hides after two seconds of inactivity in the game window and
+reappears when you move the mouse.
+
 The Windows port adapts the achievement UI, PlayStation artwork and networking
 from [ThisIsAkill/Table-Tennis-Linux](https://github.com/ThisIsAkill/Table-Tennis-Linux),
 commit `7bff91c561fa0e424562c6d851b9008e9fc9511e`. Thanks to **ThisIsAkill**!

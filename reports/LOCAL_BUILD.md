@@ -1,5 +1,19 @@
 # Local build and source distribution
 
+## Mouse cursor auto-hide - 2026-11-04 (unreleased)
+
+Enable the existing SDK Window kAutoHidden mode with a 2000 ms delay during
+OnPostSetup. The SDL window reveals the cursor on motion and rearms its timer.
+No engine patch or global Windows mouse setting is added. Fifteen existing
+build/native/ISO startup checks passed. A separate diagnostic game sampled
+Windows GetCursorInfo on the UI thread: movement revealed the native cursor,
+which was visible at 20:12:40.556 through 20:12:42.056 and hidden from
+20:12:42.556 onward. The capture overlay still showed a pointer marker, so native
+visibility flags were used as evidence rather than that marker. Diagnostic
+instrumentation is absent from the clean production build. Deployed only to the
+experimental installation and uncompressed update, build `5679C20EF21A`.
+Private ISO ZIP, stable root dist and GitHub remain unchanged.
+
 ## Xbox pixel-centering correction - 2026-11-04 (unreleased)
 
 ImGui truncates the text origin to whole pixels after the caller computes the
