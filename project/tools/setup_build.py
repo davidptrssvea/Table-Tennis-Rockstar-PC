@@ -167,7 +167,7 @@ def main():
     run([csc, '/nologo', '/target:winexe', '/optimize', f'/out:{dist / "tabletennis_launcher.exe"}',
          f'/win32icon:{dist / "tabletennis.ico"}',
          f'/lib:{csc.parent / "WPF"}', '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll',
-         ROOT / 'project/launcher/Launcher.cs', ROOT / 'project/launcher/HostSession.cs'])
+         ROOT / 'project/launcher/Launcher.cs', ROOT / 'project/launcher/HostSession.cs', ROOT / 'project/launcher/GatewayLeaseRouter.cs'])
     for name in ('rexruntime.dll', 'rexgpu-xenos.dll', 'TracyClient.dll'):
         shutil.copy2(sdk / 'bin' / name, dist / name)
     shutil.copytree(ROOT / 'licenses', dist / 'licenses', dirs_exist_ok=True)

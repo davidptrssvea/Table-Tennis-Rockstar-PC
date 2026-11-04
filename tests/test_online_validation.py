@@ -67,9 +67,14 @@ class RelayValidationTests(unittest.TestCase):
     def test_authentication_and_cross_room_relay(self):
         server = self.server()
         addresses = [('127.0.0.1', p) for p in (20000, 20001, 20002)]
-        for name, room, addr in zip(('Host', 'Guest', 'Other'),
-                                    ('ABC234', 'ABC234', 'DEF567'), addresses):
-            server.datagram_received(hello(name, room), addr)
+        # VIPs are room-local, so unrelated rooms may legitimately reuse one.
+        # Choose distinct fixture VIPs when asserting an out-of-room destination.
+        with mock.patch.object(relay.random, 'choice', side_effect=[1, 2, 3]):
+            for name, room, addr in zip(('Host', 'Guest', 'Other'),
+                                        ('ABC234', 'ABC234', 'DEF567'), addresses):
+                server.datagram_received(hello(name, room), addr)
+                client = server.by_addr[addr]
+                server.datagram_received(relay.MAGIC + bytes([relay.KEEPALIVE]) + struct.pack('>IQ', client.id, client.token), addr)
         host, guest, other = [server.by_addr[addr] for addr in addresses]
         def send(target, token=host.token, source=addresses[0]):
             packet = relay.MAGIC + bytes([relay.DATA]) + struct.pack(
@@ -119,6 +124,10 @@ using System.Net;
 using System.Net.NetworkInformation;
 class Probe {
  static Type t;
+ static void Controls(System.Windows.DependencyObject node,System.Collections.Generic.List<System.Windows.DependencyObject> result) {
+  result.Add(node);
+  foreach(object child in System.Windows.LogicalTreeHelper.GetChildren(node)) if(child is System.Windows.DependencyObject) Controls((System.Windows.DependencyObject)child,result);
+ }
  static void Check(string method,string value,bool expected) {
   bool actual=(bool)t.GetMethod(method,BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{value});
   if(actual!=expected) throw new Exception(method+" rejected/accepted incorrectly: "+value);
@@ -158,6 +167,18 @@ class Probe {
   System.IO.File.WriteAllText(settings,"achievement_sound=false\\nfuture_key=preserve\\niso_path=C:\\\\Test.iso\\n");
   System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[0]),"community-engine.json"),"{}");
   var window=Activator.CreateInstance(t);
+  var controls=new System.Collections.Generic.List<System.Windows.DependencyObject>();Controls((System.Windows.DependencyObject)window,controls);
+  System.Windows.Controls.ComboBox hostMode=null;System.Windows.Controls.CheckBox consent=null;
+  foreach(var control in controls) {
+   var combo=control as System.Windows.Controls.ComboBox;
+   if(combo!=null) foreach(object item in combo.Items) if(item.ToString().Contains("UPnP (EXPERIMENTAL")) hostMode=combo;
+   var checkbox=control as System.Windows.Controls.CheckBox;
+   if(checkbox!=null && checkbox.Content is System.Windows.Controls.TextBlock && ((System.Windows.Controls.TextBlock)checkbox.Content).Text.StartsWith("EXPERIMENTAL: allow")) consent=checkbox;
+  }
+  if(hostMode==null || consent==null || hostMode.SelectedIndex!=0 || consent.IsChecked==true) throw new Exception("UPnP must be explicitly experimental and off by default");
+  consent.IsChecked=true;hostMode.SelectedIndex=1;
+  if(consent.IsChecked==true) throw new Exception("Changing modes retained router permission");
+  hostMode.SelectedIndex=0;
   string folder=System.IO.Path.GetDirectoryName(args[0]);
   foreach(string name in new[]{"tabletennis.exe","rexruntime.dll","rexgpu-xenos.dll"})
    System.IO.File.WriteAllText(System.IO.Path.Combine(folder,name),"owned test fixture "+name);
@@ -199,7 +220,7 @@ class Probe {
             common = [str(csc), '/nologo', '/optimize', '/lib:' + str(csc.parent / 'WPF'),
                       '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll']
             subprocess.run(common + ['/target:winexe', '/out:' + str(launcher),
-                                      str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs')], check=True)
+                                      str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs'), str(ROOT / 'project/launcher/GatewayLeaseRouter.cs')], check=True)
             executable = folder / 'probe.exe'
             subprocess.run(common + ['/target:exe', '/out:' + str(executable), str(probe)], check=True)
             subprocess.run([str(executable), str(launcher)], check=True, timeout=10)

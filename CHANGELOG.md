@@ -2,6 +2,16 @@
 
 ## Unreleased - community Windows integration
 
+- Security hardening: invitation-room-only player hosts, four-client limit,
+  return-path confirmation before membership/relay, bounded ingress/egress and
+  error replies, protected active sessions and suppressed arbitrary LAN hints.
+- Disable host HTTP status; restrict manual diagnostics to loopback with bounded
+  HTTP/Host/Origin handling. Strict packet/UTF-8 validation preserves SDK ping/pong.
+- Mark UPnP EXPERIMENTAL and off by default; use verified renewable five-minute
+  leases, reject permanent rules, pin router requests to the selected gateway and
+  prohibit redirects/DTD/entities. Keep the static Windows adapter for legacy
+  cleanup only. Document review scope, tests and remaining protocol/router risks.
+
 - Add player-hosted sessions: Host & copy invitation starts a private background
   relay; Join invitation applies and tests it. Put manual connection fields under
   Advanced. Stop the owned relay when the host game exits or Stop hosting is used.

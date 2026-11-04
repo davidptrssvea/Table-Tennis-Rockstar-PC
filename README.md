@@ -98,13 +98,20 @@ both launch the game. Their name stays their own; different builds are rejected.
 Server/room fields and older manual controls are under **Advanced network settings**.
 
 Use **Same network / shared VPN** at home or with your VPN adapter selected.
-For separate internet connections, **Internet - automatic router setup (UPnP)**
-can request the host's game port after the host ticks its permission box. Manual
+For separate internet connections, **Internet - UPnP (EXPERIMENTAL, opt-in)**
+can request a verified five-minute game-port lease after the host ticks its
+permission box. It is off by default, and permanent rules are refused. Manual
 forwarding is also supported. No shared game service or third-party IP lookup is
 used, and Windows firewall/security settings are not changed. Routers without
 working UPnP, double NAT and CGNAT can require a shared VPN or manual setup.
 **Join invitation** checks the actual UDP connection; it cannot guarantee a complete
 match across every NAT. See [host/join setup](server/README.md).
+
+The player-host relay accepts only the invitation room and at most four clients.
+It limits unauthenticated replies and total traffic, requires return-path proof
+before sharing members, and has no TCP status listener. These are hardening steps,
+not a guarantee against hostile peers or router firmware. Share invitations with
+trusted friends; traffic remains unencrypted. Read the [security review](reports/SECURITY_REVIEW.md).
 
 Two Windows clients have joined a private room, created/joined a lobby and started
 a match on one PC. Automated checks cover direct/relayed peer traffic, room

@@ -592,7 +592,7 @@ namespace TableTennisLauncher
             parent.Children.Add(new TextBlock {Text="PLAY WITH A FRIEND",Foreground=Brushes.Cyan,FontWeight=FontWeights.Bold,Margin=new Thickness(0,8,0,5)});
             parent.Children.Add(new TextBlock {Text="HOST: start your own session and send its invitation. FRIEND: paste it and Join. Both use ONLINE > PLAYER MATCH in the game.",Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,0,0,7)});
             var mode=new ComboBox {Height=28,Margin=new Thickness(0,0,0,6)};
-            mode.Items.Add("Same network / shared VPN");mode.Items.Add("Internet - automatic router setup (UPnP)");mode.Items.Add("Internet - I forwarded the port manually");mode.SelectedIndex=0;parent.Children.Add(mode);
+            mode.Items.Add("Same network / shared VPN (default)");mode.Items.Add("Internet - UPnP (EXPERIMENTAL, opt-in)");mode.Items.Add("Internet - I forwarded the port manually");mode.SelectedIndex=0;parent.Children.Add(mode);
             var addresses=new List<string>();
             var adapterBox=new ComboBox {Height=28,Margin=new Thickness(0,0,0,6)};
             string preferred=LocalServerAddress().Split(':')[0];
@@ -611,9 +611,9 @@ namespace TableTennisLauncher
             var manual=NetworkField(parent,"Your forwarded public IPv4:port",253);manual.Visibility=Visibility.Collapsed;
             // Keep the manual address label with the field when switching modes.
             var manualLabel=parent.Children[parent.Children.Count-2] as TextBlock;manualLabel.Visibility=Visibility.Collapsed;
-            var routerConsent=new CheckBox {Content=new TextBlock {Text="Allow the launcher to request UDP port 27360 from my router. It will try to remove its own rule when hosting stops.",TextWrapping=TextWrapping.Wrap},Foreground=Brushes.LightGray,Margin=new Thickness(0,0,0,6),Visibility=Visibility.Collapsed};
+            var routerConsent=new CheckBox {IsChecked=false,Content=new TextBlock {Text="EXPERIMENTAL: allow a five-minute, renewable UDP port 27360 rule for this host session. This exposes the game server to internet traffic. Permanent rules are refused. Use only with trusted friends and your own trusted router.",TextWrapping=TextWrapping.Wrap},Foreground=Brushes.Gold,Margin=new Thickness(0,0,0,6),Visibility=Visibility.Collapsed};
             parent.Children.Add(routerConsent);
-            mode.SelectionChanged+=(sender,args)=>{manual.Visibility=manualLabel.Visibility=mode.SelectedIndex==2?Visibility.Visible:Visibility.Collapsed;routerConsent.Visibility=mode.SelectedIndex==1?Visibility.Visible:Visibility.Collapsed;};
+            mode.SelectionChanged+=(sender,args)=>{routerConsent.IsChecked=false;manual.Visibility=manualLabel.Visibility=mode.SelectedIndex==2?Visibility.Visible:Visibility.Collapsed;routerConsent.Visibility=mode.SelectedIndex==1?Visibility.Visible:Visibility.Collapsed;};
             var invite=NetworkField(parent,"Invitation (paste your friend's TT1 code)",512);
             var status=new TextBlock {Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,5,0,8)};
             var actions=new WrapPanel();
@@ -623,17 +623,28 @@ namespace TableTennisLauncher
             var join=new Button {Content="Join invitation",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
             var room=new Button {Content="New private room",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
             var test=new Button {Content="Test connection",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
-            room.Click+=(sender,args)=>{txtRoom.Text=NewPrivateRoom();status.Text="New room selected. Copy a new invitation and share it with your friend.";};
+            room.Click+=(sender,args)=>{
+                if(HostSession.InvitationRoom(Path.GetDirectoryName(distDir.TrimEnd('\\')),txtServer.Text.Trim(),"")!="") {status.Text="Stop hosting before creating a new private room.";return;}
+                txtRoom.Text=NewPrivateRoom();status.Text="New room selected. Start hosting to share a new invitation.";
+            };
             string root=Path.GetDirectoryName(distDir.TrimEnd('\\'));
+            try {
+                if(File.Exists(Path.Combine(root,".updates","hosting","active.txt"))) {
+                    string active=HostSession.Active(root);
+                    var existing=HostSession.Fields(Path.Combine(HostSession.SessionFolder(root,active),"status.txt"));
+                    if(existing.ContainsKey("state") && existing["state"]=="ready" && HostSession.Running(root)) status.Text="An existing host session is still running ("+(existing.ContainsKey("scope")?existing["scope"]:"unknown mode")+"). Use Stop hosting to close it before changing modes. UPnP permission is not retained.";
+                }
+            } catch {status.Text="Previous hosting state needs checking. Stop hosting before starting another session.";}
             host.Click+=async (sender,args)=>{
                 if(adapterBox.SelectedIndex<0) {status.Text="No host connection was detected. Connect your network/VPN and reopen the launcher.";return;}
                 if(mode.SelectedIndex==1 && routerConsent.IsChecked!=true) {status.Text="Tick the router permission box to try UPnP, or choose LAN/VPN/manual hosting.";return;}
                 if(!Regex.IsMatch(OnlineBuildId(),@"\A[0-9A-F]{12}\z")) {status.Text="The game build is incomplete. Restore the full installation.";return;}
                 string selected=addresses[adapterBox.SelectedIndex],selectedMode=mode.SelectedIndex==1?"upnp":mode.SelectedIndex==2?"manual":"lan",external=manual.Text.Trim();
+                string hostRoom=txtRoom.Text.Trim().ToUpperInvariant();if(hostRoom.Length!=6 || !ValidRoom(hostRoom)) hostRoom=NewPrivateRoom();
                 host.IsEnabled=join.IsEnabled=create.IsEnabled=room.IsEnabled=false;
                 status.Text="Starting your host...";
                 try {
-                    string token=await Task.Run(()=>HostSession.Start(root,selected,selectedMode,external));
+                    string token=await Task.Run(()=>HostSession.Start(root,selected,selectedMode,external,hostRoom));
                     string folder=HostSession.SessionFolder(root,token);
                     for(int i=0;i<180;i++) {
                         var fields=HostSession.Fields(Path.Combine(folder,"status.txt"));string state,message;
@@ -641,7 +652,7 @@ namespace TableTennisLauncher
                         if(fields.TryGetValue("state",out state)) {
                             if(state=="error" || state=="stopped") throw new IOException(message??"Hosting stopped.");
                             if(state=="ready") {
-                                string code=txtRoom.Text.Trim().ToUpperInvariant();if(code.Length!=6 || !ValidRoom(code)) code=NewPrivateRoom();
+                                string code=fields["room"];
                                 string invitation=MakeInvitation(fields["address"],code,OnlineBuildId());
                                 txtServer.Text=fields["local"];txtRoom.Text=code;chkNetwork.IsChecked=true;invite.Text=invitation;
                                 string warning=fields.ContainsKey("message") && fields["message"].Contains("cleanup")?" "+fields["message"]:"";
@@ -654,12 +665,13 @@ namespace TableTennisLauncher
                     }
                     HostSession.Stop(root);throw new IOException("Host setup timed out. Stop hosting, then try shared VPN/LAN or manual port forwarding.");
                 } catch(Exception error) {status.Text="Could not host: "+error.GetBaseException().Message;}
-                finally {host.IsEnabled=join.IsEnabled=create.IsEnabled=room.IsEnabled=true;}
+                finally {routerConsent.IsChecked=false;host.IsEnabled=join.IsEnabled=create.IsEnabled=room.IsEnabled=true;}
             };
             stop.Click+=async (sender,args)=>{
                 stop.IsEnabled=false;
                 try {
                     string token=HostSession.Active(root);if(token==null) {status.Text="No host session has been started here.";return;}
+                    if(!HostSession.Running(root)) {status.Text="No host process is running. Unrenewed leases should expire; the next host start retries journaled cleanup.";return;}
                     HostSession.Stop(root);status.Text="Stopping your host and removing its router rule...";
                     for(int i=0;i<60;i++) {
                         var fields=HostSession.Fields(Path.Combine(HostSession.SessionFolder(root,token),"status.txt"));
@@ -672,7 +684,7 @@ namespace TableTennisLauncher
             };
             create.Click+=(sender,args)=>{
                 try {
-                    string code=txtRoom.Text.Trim().ToUpperInvariant();
+                    string code=HostSession.InvitationRoom(root,txtServer.Text.Trim(),txtRoom.Text.Trim().ToUpperInvariant());
                     if(code.Length==0) code=NewPrivateRoom();
                     string text=MakeInvitation(HostSession.InvitationAddress(root,txtServer.Text.Trim()),code,OnlineBuildId());
                     Clipboard.SetText(text);invite.Text=text;txtRoom.Text=code;chkNetwork.IsChecked=true;
@@ -702,10 +714,14 @@ namespace TableTennisLauncher
             parent.Children.Add(actions);parent.Children.Add(status);
             var extra=new WrapPanel();foreach(var button in new[]{create,room,test}) extra.Children.Add(button);
             parent.Children.Add(new Expander {Header="More connection tools",Content=extra,Foreground=Brushes.LightGray,Margin=new Thickness(0,0,0,7)});
-            parent.Children.Add(new TextBlock {Text="No shared game server or account is needed. Internet hosting can be blocked by your router/operator (CGNAT). If automatic setup fails, use a shared VPN or manual forwarding. Handle any Windows network permission prompt yourself. Closing this launcher leaves the host running; Stop hosting ends it. An unused host expires after 30 minutes.",Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,0,0,8)});
+            parent.Children.Add(new TextBlock {Text="UPnP is EXPERIMENTAL and off by default. No Windows firewall settings are changed. Only the invitation room is accepted (up to four clients). Share invitations only with trusted friends: traffic is not encrypted. Stop hosting removes the owned rule; a router honoring its lease expires it within five minutes without renewal after a crash. Hosting ends with the host game, after 30 idle minutes, or after four hours. CGNAT/unsupported routers may require a shared VPN/manual setup.",Foreground=Brushes.LightGray,TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,0,0,8)});
         }
 
         private Process StartLocalRelay(int port) {
+            string privateRoom=txtRoom.Text.Trim().ToUpperInvariant();
+            if(privateRoom.Length==0) privateRoom=NewPrivateRoom();
+            if(privateRoom.Length!=6 || !ValidRoom(privateRoom)) throw new InvalidOperationException("Choose a valid private room before hosting.");
+            txtRoom.Text=privateRoom;
             string root = Path.GetDirectoryName(distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             string python = Path.Combine(root, "tools", "python", "python.exe");
             if (!File.Exists(python)) python = Path.Combine(root, ".tools", "python314", "python.exe");
@@ -718,7 +734,7 @@ namespace TableTennisLauncher
                 if (endpoint.Port == port) throw new InvalidOperationException("UDP port " + port + " is already in use. Check the existing server window; another server will not be started.");
             foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())
                 if (endpoint.Port == port) throw new InvalidOperationException("TCP port " + port + " is already in use. Close the conflicting application or choose a different server port.");
-            var process = Process.Start(new ProcessStartInfo(python, "\"" + server + "\" --bind 0.0.0.0 --port " + port) {
+            var process = Process.Start(new ProcessStartInfo(python, "-I -B \"" + server + "\" --bind 0.0.0.0 --port " + port+" --room "+privateRoom+" --max-clients 4 --no-status") {
                 WorkingDirectory = root, UseShellExecute = true });
             if (process == null) throw new InvalidOperationException("Windows did not start the server.");
             try {

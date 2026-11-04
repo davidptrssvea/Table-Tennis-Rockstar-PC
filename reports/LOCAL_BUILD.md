@@ -699,3 +699,47 @@ existing uncompressed update; settings and stable desktop launcher were checked
 unchanged. Prior test launcher: scratch/player-host-backup-20261104. Game/engine
 files and build ID 92C1FB9231FA unchanged. Source-only signed candidate/first
 installer refreshed locally. Private ISO ZIP and published GitHub release unchanged.
+## Server/UPnP security hardening - 2026-11-04
+
+Completed a scoped source review and adversarial regression pass; see
+reports/SECURITY_REVIEW.md for findings, fixes, protocol references and limits.
+Player hosts (including the Advanced console-start path) accept only their
+private invitation room, at most four clients, no HTTP listener. Membership and
+relayed traffic require return-path proof; unauthenticated reconnect cannot evict
+an active endpoint. Global control/HELLO/ingress/egress budgets and member-update
+coalescing bound work and fan-out. Suppressed arbitrary peer LAN hints; strict
+length/UTF-8 parsing retains the SDK's zero-port 13/15-byte ping/pong control path.
+Manual diagnostics are loopback-only, bounded and protected against browser
+Origin/Host misuse. Generic standalone CLI operation is distinct from the locked
+player-host mode.
+
+Replaced new static Windows NAT rules with pinned-gateway IGD SOAP leases: request
+300 seconds, verify finite lease/ownership, renew at 90 seconds, refuse permanent
+fallbacks. Responses/URLs/XML/time are bounded; redirects, proxies, DNS control
+URLs, DTD/entities and off-gateway targets are refused. The old COM adapter can
+only clean up legacy rules. Consent is explicit, unchecked initially, not saved,
+cleared on mode changes and after setup; UPnP is visibly EXPERIMENTAL. Own mapping
+journal/deletion validation remains, with firmware/transaction race limitations
+explicitly documented. Four-hour host maximum and bounded logs/status are added.
+A Windows OS process handle with exact supervisor creation time makes the relay
+exit after supervisor crash, not just on graceful game exit/Stop hosting.
+
+Final full run: 68 tests passed in 110.175 seconds with native SDK/network,
+controller, pacing/layout and ISO runtime checks enabled. Eleven dedicated
+security cases include 5,000 deterministic mutations, spoof/reflection/resource
+bounds, HTTP exposure, gateway pinning, malicious XML/redirect/oversized responses,
+foreign rules and real C# finite/permanent SOAP behavior against loopback fakes.
+Real embedded-Python lifecycle tests include forced helper kill and child exit.
+The UI was inspected with LAN/VPN selected by default and experimental UPnP in
+the dropdown; no checkbox permission or real router action was automated.
+
+Backups: scratch/security-review-backup-20261104. Installed the rebuilt launcher
+and updated relay into scratch/community-feature-test/dist and refreshed the
+existing uncompressed update (including its legacy server copy). Settings and
+stable desktop game/launcher hashes were retained. Native game/SDK files were
+not changed; online build ID remains 92C1FB9231FA. Signed source-only candidate
+and first-installer candidate refreshed locally. Private ISO ZIP, remote GitHub
+and published release were not changed. No real router, Windows firewall/security
+setting or public service was modified. Traffic is still unencrypted; trusted
+friends only, physical-router/Internet tests and original-game parser audit remain
+outside the validated scope. This is not independent security certification.

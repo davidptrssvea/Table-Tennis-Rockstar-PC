@@ -24,7 +24,7 @@ class HostSessionTests(unittest.TestCase):
 class Fake:IHostRouter {
  public RouterMapping Map;public int Adds,Removes;public string External="8.8.8.8";
  public RouterMapping Find(int port){return Map;}
- public RouterMapping Add(int port,string client,string description){Adds++;return Map=new RouterMapping{Port=port,InternalPort=port,Client=client,Description=description,External=External};}
+ public RouterMapping Add(int port,string client,string description){Adds++;return Map=new RouterMapping{Port=port,InternalPort=port,Client=client,Description=description,External=External,LeaseSeconds=300};}
  public void Remove(int port){Removes++;Map=null;} public void Dispose(){}
 }
 class Probe {
@@ -61,7 +61,7 @@ class Probe {
             csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
             exe = folder / 'probe.exe'
             subprocess.run([str(csc), '/nologo', '/out:' + str(exe), str(probe),
-                            str(ROOT / 'project/launcher/HostSession.cs')], check=True)
+                            str(ROOT / 'project/launcher/HostSession.cs'), str(ROOT / 'project/launcher/GatewayLeaseRouter.cs')], check=True)
             subprocess.run([str(exe)], check=True, timeout=10)
 
     def test_real_loopback_host_duplicate_stop_and_game_exit(self):
@@ -90,14 +90,14 @@ class Probe {
             subprocess.run([str(csc), '/nologo', '/target:winexe', '/out:' + str(exe),
                             '/lib:' + str(csc.parent / 'WPF'),
                             '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll',
-                            str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs')], check=True)
+                            str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs'), str(ROOT / 'project/launcher/GatewayLeaseRouter.cs')], check=True)
             game_source = root / 'game.cs'
             game_source.write_text('class Game {static void Main(){System.Threading.Thread.Sleep(1800);}}')
             subprocess.run([str(csc), '/nologo', '/out:' + str(dist / 'tabletennis.exe'), str(game_source)], check=True)
-            for finish in ('stop', 'game'):
+            for finish in ('stop', 'game', 'crash'):
                 token = uuid.uuid4().hex
                 session = root / '.updates/hosting' / token
-                process = subprocess.Popen([str(exe), '--host-session', str(root), '127.0.0.1', 'lan', '', token])
+                process = subprocess.Popen([str(exe), '--host-session', str(root), '127.0.0.1', 'lan', '', token, 'ABC234'])
                 try:
                     deadline = time.monotonic() + 10
                     status = ''
@@ -116,9 +116,31 @@ class Probe {
                         udp.settimeout(2)
                         udp.sendto(b'TTV1\x04' + b'\0'*12, ('127.0.0.1', 27360))
                         self.assertTrue(udp.recv(2048).startswith(b'TTV1\x0c\x05'))
-                    duplicate = subprocess.run([str(exe), '--host-session', str(root), '127.0.0.1', 'lan', '', uuid.uuid4().hex], timeout=5)
+                    duplicate = subprocess.run([str(exe), '--host-session', str(root), '127.0.0.1', 'lan', '', uuid.uuid4().hex, 'ABC234'], timeout=5)
                     self.assertNotEqual(duplicate.returncode, 0)
                     self.assertEqual((root / '.updates/hosting/active.txt').read_text(), token)
+                    if finish == 'crash':
+                        import ctypes
+                        from ctypes import wintypes
+                        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+                        kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+                        kernel.OpenProcess.restype = wintypes.HANDLE
+                        kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+                        kernel.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+                        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+                        pid = int((root / '.updates/server.pid').read_text().splitlines()[0])
+                        # Handle obtained from this test's owned relay before crashing its parent.
+                        handle = kernel.OpenProcess(0x100000 | 1, False, pid)
+                        self.assertTrue(handle)
+                        try:
+                            process.kill();process.wait(timeout=5)
+                            exited = kernel.WaitForSingleObject(handle, 5000)
+                            if exited != 0:
+                                kernel.TerminateProcess(handle, 1)
+                            self.assertEqual(exited, 0, 'Relay survived its supervisor crash')
+                        finally:
+                            kernel.CloseHandle(handle)
+                        continue
                     if finish == 'stop':
                         (session / 'stop').write_text('stop')
                     else:

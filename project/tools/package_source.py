@@ -14,7 +14,7 @@ FIXED_FILES = {
     'project/release.json', 'project/engine.json', 'project/updater/Updater.cs', 'project/updater/UpdateCore.cs',
     'project/updater/README.md', 'project/updater/release-public-key.xml', 'project/updater/update_backend.py',
     'project/tools/build_updater.py', 'project/tools/sign_update.ps1', 'project/tools/prepare_update.py',
-    'project/cmake/rexglue.cmake', 'project/launcher/Launcher.cs', 'project/launcher/HostSession.cs',
+    'project/cmake/rexglue.cmake', 'project/launcher/Launcher.cs', 'project/launcher/HostSession.cs', 'project/launcher/GatewayLeaseRouter.cs',
     'project/src/main.cpp', 'project/src/tabletennis_app.h', 'project/src/offline_menu_device.h',
     'project/src/intro_skip.cpp', 'project/src/intro_skip.h',
     'project/src/frame_pacer.cpp', 'project/src/frame_pacer.h',
@@ -32,7 +32,7 @@ FIXED_FILES = {
     'project/sdk-patches/0001-community-windows.patch',
     'server/ttlink_server.py', 'server/README.md',
     'tests/test_community_network.py', 'tests/community_network_probe.cpp',
-    'tests/test_online_validation.py', 'tests/test_host_session.py', 'tests/button_prompts_probe.cpp',
+    'tests/test_online_validation.py', 'tests/test_host_session.py', 'tests/test_security_review.py', 'tests/button_prompts_probe.cpp',
     'project/src/screen_layout.h', 'tests/pc_features_test.cpp',
     'project/src/stats_window.cpp', 'project/src/stats_window.h',
     'project/sdk-overrides/rex/platform/fpscr.h', 'project/sdk-overrides/rex/ppc/context.h',
@@ -42,7 +42,7 @@ FIXED_FILES = {
     'tests/test_local_build.py', 'tests/test_update_backend.py', 'tests/test_update_client.py',
     'licenses/ReXGlue/LICENSE.txt', 'licenses/SDL3/LICENSE.txt',
     'reports/LOCAL_BUILD.md',
-    'reports/ONLINE_REVIEW.md',
+    'reports/ONLINE_REVIEW.md', 'reports/SECURITY_REVIEW.md',
     'project/installer/Installer.cs', 'project/tools/bootstrap.ps1', 'project/tools/build_installer.ps1',
 }
 

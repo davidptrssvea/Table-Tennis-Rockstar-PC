@@ -48,9 +48,9 @@ VIRTUAL_NET = 0x0A580000  # 10.88.0.0/16: room-local addresses the games use for
 MAX_PAYLOAD = 1400
 CLIENT_TIMEOUT = 30.0
 MEMBERS_REFRESH = 10.0
-MAX_CLIENTS = 2000
+MAX_CLIENTS = 128
 MAX_PER_IP = 8
-MAX_PUBLIC_ROOM = 250
+MAX_PUBLIC_ROOM = 32
 MAX_PRIVATE_ROOM = 16
 # Per client: sustained packets and bytes per second, with a burst allowance of two seconds.
 PACKET_RATE = 400
@@ -101,7 +101,7 @@ class Bucket:
 class Client:
     __slots__ = ("id", "token", "nonce", "addr", "name", "room", "vip", "local_ip", "local_port",
                  "last_seen", "packets", "bytes", "broadcasts", "relayed_bytes", "joined", "rtt",
-                 "utc_offset", "streak_start", "last_broadcast", "_reach", "key")
+                 "utc_offset", "streak_start", "last_broadcast", "_reach", "key", "confirmed")
 
     def __init__(self, cid, token, nonce, addr, name, room, vip, local_ip, local_port):
         self.id = cid
@@ -125,6 +125,7 @@ class Client:
         self.last_broadcast = 0.0
         self._reach = None        # last logged search reach
         self.key = room           # key in Server.rooms (see room_key)
+        self.confirmed = False    # Return-path proof before membership/fan-out.
 
 
 def room_key(version, room):
@@ -179,7 +180,12 @@ def ip_to_int(ip):
 
 
 class Server(asyncio.DatagramProtocol):
-    def __init__(self):
+    def __init__(self, allowed_room=None, max_clients=MAX_CLIENTS):
+        if allowed_room is not None and (len(allowed_room) != ROOM_LENGTH or any(c not in ROOM_ALPHABET for c in allowed_room)):
+            raise ValueError('A host needs one valid private room')
+        if not 1 <= max_clients <= MAX_CLIENTS:
+            raise ValueError('Invalid client limit')
+        self.allowed_room, self.max_clients = allowed_room, max_clients
         self.transport = None
         self.clients = {}       # id -> Client
         self.by_addr = {}       # (ip, port) -> Client
@@ -187,23 +193,51 @@ class Server(asyncio.DatagramProtocol):
         self.hello_limits = {}  # ip -> Bucket
         self.relayed_total = 0
         self.started = time.time()
+        self.ingress = Bucket(5000, 1)
+        self.hellos = Bucket(20, 1)
+        self.egress_packets = Bucket(5000, 1)
+        self.egress_bytes = Bucket(4 * 1024 * 1024, 1)
+        self.control_replies = Bucket(50, 1)
+        self.member_limits = {}
+        self.dirty_rooms = set()
+        self.http_connections = 0
+        self.http_requests = Bucket(10, 1)
+        self.transport_errors = Bucket(1, 1)
 
     # --- transport ---------------------------------------------------------------------------
     def connection_made(self, transport):
         self.transport = transport
 
     def error_received(self, exc):
-        logging.warning("UDP transport reported an error: %s", exc)
+        if self.transport_errors.take():
+            logging.warning("UDP transport reported an error: %s", exc)
 
     def send(self, addr, kind, body=b""):
-        self.transport.sendto(MAGIC + bytes([kind]) + body, addr)
+        return self.send_raw(MAGIC + bytes([kind]) + body, addr)
+
+    def send_raw(self, message, addr):
+        if not self.egress_packets.take() or not self.egress_bytes.take(len(message)):
+            return False
+        try:
+            self.transport.sendto(message, addr)
+            return True
+        except OSError:
+            return False
 
     def error(self, addr, code, text):
+        if not self.control_replies.take():
+            return
         data = text.encode()[:200]
         self.send(addr, ERROR, struct.pack(">BB", code, len(data)) + data)
 
     def datagram_received(self, data, addr):
-        if len(data) < 5 or data[:4] != MAGIC or len(data) > MAX_PAYLOAD + 64:
+        if not self.ingress.take() or len(data) < 5 or data[:4] != MAGIC or len(data) > MAX_PAYLOAD + 64:
+            return
+        try:
+            source = ipaddress.IPv4Address(addr[0])
+            if not 1 <= addr[1] <= 65535 or source.is_multicast or source.is_unspecified or source.is_reserved:
+                return
+        except (ValueError, IndexError, TypeError):
             return
         kind = data[4]
         body = data[5:]
@@ -211,14 +245,21 @@ class Server(asyncio.DatagramProtocol):
             if kind == HELLO:
                 self.on_hello(body, addr)
             elif kind in (KEEPALIVE, DATA, BYE):
+                if (kind == KEEPALIVE and len(body) not in (12, 14) or
+                    kind == BYE and len(body) != 12 or
+                    kind == DATA and not 20 <= len(body) <= 20 + MAX_PAYLOAD):
+                    return
                 client = self.authenticate(body, addr)
                 if client is None:
                     if kind != BYE:
                         self.error(addr, ERR_UNKNOWN, "unknown client")
                     return
-                client.last_seen = time.monotonic()
                 if not client.packets.take() or not client.bytes.take(len(data)):
                     return
+                client.last_seen = time.monotonic()
+                if kind != BYE and not client.confirmed:
+                    client.confirmed = True
+                    self.send_members(client.key)
                 if kind == KEEPALIVE:
                     if len(body) >= 14:
                         rtt = struct.unpack_from(">H", body, 12)[0]
@@ -240,6 +281,26 @@ class Server(asyncio.DatagramProtocol):
 
     # --- messages ----------------------------------------------------------------------------
     def on_hello(self, body, addr):
+        if not self.hellos.take():
+            return
+        version, nonce = struct.unpack_from(">BQ", body, 0)
+        pos = 9
+        name_len = body[pos]
+        if not 1 <= name_len <= 60:
+            return
+        name = body[pos + 1:pos + 1 + name_len].decode("utf-8")
+        pos += 1 + name_len
+        room_len = body[pos]
+        if room_len not in (0, ROOM_LENGTH):
+            return
+        room = body[pos + 1:pos + 1 + room_len].decode("ascii").upper()
+        pos += 1 + room_len
+        local_ip, local_port = struct.unpack_from(">IH", body, pos)
+        pos += 6
+        if len(body) not in (pos, pos + 2) or local_port == 0:
+            return
+        if self.allowed_room is not None and room != self.allowed_room:
+            return  # No room enumeration or error amplification for strangers.
         bucket = self.hello_limits.get(addr[0])
         if bucket is None:
             if len(self.hello_limits) >= MAX_HELLO_IPS:
@@ -247,16 +308,6 @@ class Server(asyncio.DatagramProtocol):
             bucket = self.hello_limits[addr[0]] = Bucket(HELLO_RATE_PER_IP)
         if not bucket.take():
             return
-        version, nonce = struct.unpack_from(">BQ", body, 0)
-        pos = 9
-        name_len = body[pos]
-        name = body[pos + 1:pos + 1 + name_len].decode("utf-8", "replace")
-        pos += 1 + name_len
-        room_len = body[pos]
-        room = body[pos + 1:pos + 1 + room_len].decode("ascii", "replace").upper()
-        pos += 1 + room_len
-        local_ip, local_port = struct.unpack_from(">IH", body, pos)
-        pos += 6
         utc_offset = struct.unpack_from(">h", body, pos)[0] if len(body) >= pos + 2 else None
         if version not in SUPPORTED_VERSIONS:
             self.error(addr, ERR_VERSION, "this server speaks a different version; update the game")
@@ -269,11 +320,13 @@ class Server(asyncio.DatagramProtocol):
         existing = self.by_addr.get(addr)
         if existing is not None:
             if existing.nonce == nonce:  # a resent HELLO: answer it again
-                existing.last_seen = time.monotonic()
                 self.welcome(existing)
                 return
+            if time.monotonic() - existing.last_seen <= NAME_RECLAIM:
+                self.error(addr, ERR_LIMIT, "session is active; retry after disconnect")
+                return
             self.remove(existing, "reconnected")
-        if len(self.clients) >= MAX_CLIENTS:
+        if len(self.clients) >= self.max_clients:
             self.error(addr, ERR_FULL, "server is full")
             return
         if sum(1 for c in self.clients.values() if c.addr[0] == addr[0]) >= MAX_PER_IP:
@@ -314,7 +367,7 @@ class Server(asyncio.DatagramProtocol):
                      "the public room" if room == PUBLIC_ROOM else "a private room",
                      ipaddress.IPv4Address(vip), len(members), len(self.clients))
         self.welcome(client)
-        self.send_members(key)
+        # Do not introduce an address that has not proved it received WELCOME.
 
     def welcome(self, client):
         room = client.room.encode()
@@ -323,7 +376,14 @@ class Server(asyncio.DatagramProtocol):
         self.send(client.addr, WELCOME, body)
 
     def send_members(self, room):
-        members = list(self.rooms.get(room, {}).values())
+        members = [c for c in self.rooms.get(room, {}).values() if c.confirmed]
+        if not members:
+            return
+        limit = self.member_limits.setdefault(room, Bucket(2, 1))
+        if not limit.take():
+            self.dirty_rooms.add(room)
+            return
+        self.dirty_rooms.discard(room)
         for target in members:
             entries = []
             for m in members:
@@ -331,7 +391,10 @@ class Server(asyncio.DatagramProtocol):
                     continue
                 name = m.name.encode()[:15]
                 entries.append(struct.pack(">IIQIHIHB", m.id, m.vip, m.token, ip_to_int(m.addr[0]),
-                                           m.addr[1], m.local_ip, m.local_port, len(name)) + name)
+                                           m.addr[1], 0, 0, len(name)) + name)
+                # Never make a peer probe an arbitrary advertised LAN/loopback
+                # address. The observed, return-path-confirmed endpoint suffices;
+                # the relay remains available when direct traffic cannot work.
             # Keep each message well under the payload limit; large rooms get several messages.
             chunk = []
             size = 0
@@ -356,7 +419,9 @@ class Server(asyncio.DatagramProtocol):
     def on_data(self, client, body):
         dst_vip, src_port, dst_port = struct.unpack_from(">IHH", body, 0)
         payload = body[8:]
-        if len(payload) > MAX_PAYLOAD:
+        control = (src_port == dst_port == 0 and dst_vip != BROADCAST and
+                   len(payload) in (13, 15) and payload[0] in (1, 2))
+        if len(payload) > MAX_PAYLOAD or (not src_port or not dst_port) and not control:
             return
         members = self.rooms.get(client.key, {})
         message = MAGIC + bytes([RELAYED]) + struct.pack(">IHH", client.vip, src_port, dst_port) + payload
@@ -367,7 +432,7 @@ class Server(asyncio.DatagramProtocol):
             if now - client.last_broadcast > SEARCH_QUIET:
                 client.streak_start = now
             client.last_broadcast = now
-            targets = [m for m in members.values() if m is not client]
+            targets = [m for m in members.values() if m is not client and m.confirmed]
             if client.room == PUBLIC_ROOM:
                 everyone = len(targets)
                 targets = [m for m in targets if reaches(client, m, now)]
@@ -378,11 +443,11 @@ class Server(asyncio.DatagramProtocol):
                                  "%d ms" % r if r else "any distance", len(targets), everyone)
         else:
             target = members.get(dst_vip)
-            targets = [target] if target is not None and target is not client else []
+            targets = [target] if target is not None and target is not client and target.confirmed else []
         for target in targets:
-            self.transport.sendto(message, target.addr)
-            target.relayed_bytes += len(message)
-            self.relayed_total += len(message)
+            if self.send_raw(message, target.addr):
+                target.relayed_bytes += len(message)
+                self.relayed_total += len(message)
 
     def remove(self, client, why):
         self.clients.pop(client.id, None)
@@ -393,6 +458,8 @@ class Server(asyncio.DatagramProtocol):
             members.pop(client.vip, None)
             if not members:
                 del self.rooms[client.key]
+                self.member_limits.pop(client.key, None)
+                self.dirty_rooms.discard(client.key)
             else:
                 self.send_members(client.key)
         logging.info("%s %s (%d online)", client.name, why, len(self.clients))
@@ -401,12 +468,14 @@ class Server(asyncio.DatagramProtocol):
     async def housekeeping(self):
         last_refresh = time.monotonic()
         while True:
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(.5)
             now = time.monotonic()
-            for client in [c for c in self.clients.values() if now - c.last_seen > CLIENT_TIMEOUT]:
+            for client in [c for c in self.clients.values() if now - c.last_seen > (CLIENT_TIMEOUT if c.confirmed else 6.0)]:
                 self.remove(client, "timed out")
             for ip in [ip for ip, b in self.hello_limits.items() if now - b.stamp > 60]:
                 del self.hello_limits[ip]
+            for room in list(self.dirty_rooms):
+                self.send_members(room)
             if now - last_refresh > MEMBERS_REFRESH:
                 last_refresh = now
                 for room in list(self.rooms):
@@ -443,12 +512,30 @@ class Server(asyncio.DatagramProtocol):
 
 
 async def http_status(server, reader, writer):
-    """Minimal HTTP: GET /status returns JSON; anything else a short text page."""
+    """Bounded loopback-only diagnostic service, never a public status endpoint."""
+    accepted = False
     try:
+        peer = writer.get_extra_info('peername')
+        if not peer or not ipaddress.ip_address(peer[0]).is_loopback or server.http_connections >= 8 or not server.http_requests.take():
+            return
+        server.http_connections += 1
+        accepted = True
         request = await asyncio.wait_for(reader.read(2048), timeout=5.0)
+        if b'\r\n\r\n' not in request:
+            return
         line = request.split(b"\r\n", 1)[0].decode("latin-1", "replace")
-        path = line.split(" ")[1] if line.count(" ") >= 2 else "/"
-        if path.startswith("/status"):
+        parts = line.split(" ")
+        if len(parts) != 3 or parts[0] != 'GET' or parts[1] not in ('/', '/status') or parts[2] not in ('HTTP/1.0', 'HTTP/1.1'):
+            return
+        headers = request.split(b'\r\n')[1:]
+        hosts = [h.split(b':', 1)[1].strip().lower() for h in headers if h.lower().startswith(b'host:')]
+        if any(h.lower().startswith(b'origin:') for h in headers) or len(hosts) > 1:
+            return
+        if hosts and hosts[0].split(b':')[0] not in (b'localhost', b'127.0.0.1'):
+            return
+        if parts[2] == 'HTTP/1.1' and not hosts:
+            return
+        if parts[1] == '/status':
             body = json.dumps(server.status(), indent=1).encode()
             kind = "application/json"
         else:
@@ -458,12 +545,14 @@ async def http_status(server, reader, writer):
                                             s["private_rooms"])).encode()
             kind = "text/plain; charset=utf-8"
         writer.write(b"HTTP/1.0 200 OK\r\nContent-Type: " + kind.encode() +
-                     b"\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " +
+                     b"\r\nX-Content-Type-Options: nosniff\r\nContent-Length: " +
                      str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
-        await writer.drain()
+        await asyncio.wait_for(writer.drain(), timeout=2.0)
     except (asyncio.TimeoutError, ConnectionError, IndexError):
         pass
     finally:
+        if accepted:
+            server.http_connections -= 1
         writer.close()
 
 
@@ -473,20 +562,83 @@ async def main():
                         help="UDP port for the game, and TCP port for /status (default 27360)")
     parser.add_argument("--bind", default=os.environ.get("TTLINK_BIND", "0.0.0.0"))
     parser.add_argument("--quiet", action="store_true", help="log only warnings")
+    parser.add_argument('--room', help='Accept only this private invitation room')
+    parser.add_argument('--max-clients', type=int, default=MAX_CLIENTS)
+    parser.add_argument('--no-status', action='store_true', help='Disable the loopback TCP diagnostic listener')
+    parser.add_argument('--parent-pid', type=int, help='Windows supervisor PID; exit if it exits')
+    parser.add_argument('--parent-ticks', type=int, help='Exact .NET UTC creation ticks of the supervisor')
     args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error('Port must be 1-65535')
+    if not 1 <= args.max_clients <= MAX_CLIENTS:
+        parser.error('Client limit must be 1-%d' % MAX_CLIENTS)
+    parent = None
+    if args.parent_pid is not None or args.parent_ticks is not None:
+        if os.name != 'nt' or not args.parent_pid or not args.parent_ticks:
+            parser.error('Both Windows parent identity arguments are required')
+        parent = ParentWatch(args.parent_pid, args.parent_ticks)
     logging.basicConfig(level=logging.WARNING if args.quiet else logging.INFO,
                         format="%(asctime)s %(message)s")
 
     loop = asyncio.get_running_loop()
-    server = Server()
+    server = Server(args.room, args.max_clients)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
     sock.bind((args.bind, args.port))
     await loop.create_datagram_endpoint(lambda: server, sock=sock)
-    http = await asyncio.start_server(lambda r, w: http_status(server, r, w), args.bind, args.port)
-    logging.info("listening on %s:%d (UDP game traffic, TCP /status)", args.bind, args.port)
-    async with http:
-        await server.housekeeping()
+    http = None
+    tasks = []
+    try:
+        if not args.no_status:
+            http = await asyncio.start_server(lambda r, w: http_status(server, r, w), '127.0.0.1', args.port, limit=2048, backlog=8)
+        logging.info("listening on %s:%d (UDP game traffic; diagnostics local only)", args.bind, args.port)
+        tasks.append(asyncio.create_task(server.housekeeping()))
+        if parent is not None:
+            tasks.append(asyncio.create_task(parent.wait()))
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+    finally:
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        if http is not None:
+            http.close()
+            await http.wait_closed()
+        server.transport.close()
+        if parent is not None:
+            parent.close()
+
+
+class ParentWatch:
+    """Hold an OS process handle: PID reuse cannot keep an orphan relay alive."""
+    def __init__(self, pid, ticks):
+        import ctypes
+        from ctypes import wintypes
+        self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        self.kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        self.kernel.OpenProcess.restype = wintypes.HANDLE
+        self.kernel.GetProcessTimes.argtypes = (wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4))
+        self.kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        self.kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+        self.handle = self.kernel.OpenProcess(0x100000 | 0x1000, False, pid)
+        if not self.handle:
+            raise OSError('The host supervisor is no longer available')
+        created, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        if not self.kernel.GetProcessTimes(self.handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel), ctypes.byref(user)) or (
+                (created.dwHighDateTime << 32) | created.dwLowDateTime) + 504911232000000000 != ticks:
+            self.close()
+            raise OSError('Host supervisor identity changed')
+
+    async def wait(self):
+        while self.kernel.WaitForSingleObject(self.handle, 0) == 258:  # WAIT_TIMEOUT
+            await asyncio.sleep(.5)
+
+    def close(self):
+        if self.handle:
+            self.kernel.CloseHandle(self.handle)
+            self.handle = None
 
 
 if __name__ == "__main__":
