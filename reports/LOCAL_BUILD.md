@@ -1,5 +1,16 @@
 # Local build and source distribution
 
+## Compact Photo help - 2026-11-04 (unreleased)
+
+Reduced the panel from 760x318 to 650x264 logical layout units (29% less area).
+Kept every text size and the surface scaling unchanged; reduced only the Photo
+mode button radius from 16 to 12.8 (20%). Tightened rows, columns, header/footer
+and padding. Built and visually checked the isolated 1280x720 preview for text
+bounds, button spacing and readability. Restored production Init and rebuilt;
+no preview activation or private controller hook is present. Deployed to the
+experimental installation and uncompressed update, build ID `0832B5938CF4`.
+Stable root dist, private ISO ZIP and GitHub remain unchanged.
+
 ## Xbox button font correction - 2026-11-04 (unreleased)
 
 Replaced the hand-drawn lettering after user feedback with normal Arial Bold

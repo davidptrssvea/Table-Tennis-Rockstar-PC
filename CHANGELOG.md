@@ -2,6 +2,9 @@
 
 ## Unreleased - community Windows integration
 
+- Compact the Photo mode help panel by 29% in area using tighter spacing and
+  margins. Preserve all text sizes; reduce its controller icons by exactly 20%.
+
 - Redesign Photo mode help as a dark rounded panel with aligned controller and
   keyboard columns, a zoom badge, spaced button actions and wrapped status text.
   Correct Xbox glyph scaling and center normal bold lettering; smooth

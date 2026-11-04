@@ -332,7 +332,7 @@ void Overlay::OnDraw(ImGuiIO& io) {
   if(active && !io.AppFocusLost) g_zoom_steps.fetch_add(io.MouseWheel);
   ImDrawList* dl = ImGui::GetForegroundDrawList();
   const float s=std::min(io.DisplaySize.y/720.f,io.DisplaySize.x/820.f);
-  const float width=760*s, height=318*s, margin=24*s;
+  const float width=650*s, height=264*s, margin=18*s;
   const bool help=active && g_help.load();
   const ImVec2 origin{margin,io.DisplaySize.y-margin-(help?height:0)};
   ImFont* body=achievement_ui::BodyFont();
@@ -343,38 +343,38 @@ void Overlay::OnDraw(ImGuiIO& io) {
     dl->AddText(body,size*s,at(x,y),color,value);
   };
   if(help) {
-    dl->AddRectFilled(at(0,5),at(760,323),IM_COL32(0,0,0,70),12*s);
-    dl->AddRectFilled(at(0,0),at(760,318),IM_COL32(13,18,27,242),12*s);
-    dl->AddRect(at(0,0),at(760,318),IM_COL32(135,155,182,65),12*s,0,1*s);
-    dl->AddRectFilled(at(20,19),at(24,47),gold,2*s);
-    dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(36,17),gold,"PHOTO MODE");
-    label(231,25,"FREE CAMERA",11,muted);
-    dl->AddRectFilled(at(624,17),at(740,49),IM_COL32(255,210,36,19),7*s);
+    dl->AddRectFilled(at(0,5),at(650,269),IM_COL32(0,0,0,70),12*s);
+    dl->AddRectFilled(at(0,0),at(650,264),IM_COL32(13,18,27,242),12*s);
+    dl->AddRect(at(0,0),at(650,264),IM_COL32(135,155,182,65),12*s,0,1*s);
+    dl->AddRectFilled(at(16,14),at(20,40),gold,2*s);
+    dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(30,12),gold,"PHOTO MODE");
+    label(225,20,"FREE CAMERA",11,muted);
+    dl->AddRectFilled(at(520,12),at(634,42),IM_COL32(255,210,36,19),7*s);
     char zoom[32];std::snprintf(zoom,sizeof(zoom),"ZOOM  %.2fx",g_zoom.load());
-    label(638,25,zoom,14,gold);
-    dl->AddLine(at(20,65),at(740,65),rule,1*s);
-    label(22,79,"CONTROLLER",11,gold);
-    label(402,79,"KEYBOARD & MOUSE",11,gold);
-    dl->AddLine(at(380,80),at(380,228),rule,1*s);
+    label(534,20,zoom,14,gold);
+    dl->AddLine(at(16,52),at(634,52),rule,1*s);
+    label(16,63,"CONTROLLER",11,gold);
+    label(316,63,"KEYBOARD & MOUSE",11,gold);
+    dl->AddLine(at(300,64),at(300,185),rule,1*s);
     const char* actions[]={"Move","Look","Height","Zoom","Speed"};
     const char* pad[]={"Left stick","Right stick",prompts::PlayStation()?"L2 / R2":"LT / RT","D-pad up / down",prompts::PlayStation()?"L1 slow / R1 fast":"LB slow / RB fast"};
     const char* keyboard[]={"W A S D / arrows","Mouse drag","Q / E","Wheel / Page Up / Down","Shift fast / Ctrl slow"};
     for(int row=0;row<5;row++) {
-      const float y=103+25*row;
-      label(22,y,actions[row],14,muted);label(102,y,pad[row],15,text);
-      label(402,y,actions[row],14,muted);label(482,y,keyboard[row],15,text);
+      const float y=85+21*row;
+      label(16,y,actions[row],14,muted);label(84,y,pad[row],15,text);
+      label(316,y,actions[row],14,muted);label(384,y,keyboard[row],15,text);
     }
-    dl->AddLine(at(20,242),at(740,242),rule,1*s);
+    dl->AddLine(at(16,194),at(634,194),rule,1*s);
     const char* letters[]={"A","B","X","Y"};
     const char* labels[]={"HIDE HELP","LEAVE","SAVE PICTURE","RESET VIEW"};
     const char* keys[]={"SPACE","F9 / ESC","ENTER","R"};
     const unsigned colors[]={IM_COL32(79,185,24,255),IM_COL32(215,42,42,255),IM_COL32(42,100,225,255),IM_COL32(235,190,24,255)};
     for(int i=0;i<4;i++) {
-      const float x=22+184*i;
-      prompts::DrawButton(dl,at(x+16,270),16*s,colors[i],letters[i],achievement_ui::HeadlineFont(25*s),1);
-      label(x+42,257,labels[i],13,text);label(x+42,278,keys[i],11,muted);
+      const float x=16+156*i;
+      prompts::DrawButton(dl,at(x+12.8f,219),12.8f*s,colors[i],letters[i],achievement_ui::HeadlineFont(25*s),1);
+      label(x+34,206,labels[i],13,text);label(x+34,225,keys[i],11,muted);
     }
-    label(22,301,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);
+    label(16,248,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);
   }
   if(!notice.empty()) {
     const float wrap=width-32*s;
