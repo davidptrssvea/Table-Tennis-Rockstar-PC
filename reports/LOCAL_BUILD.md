@@ -1,5 +1,29 @@
 # Local build and source distribution
 
+## Windows compiler target selection - 2026-11-05 (unpublished)
+
+A v1.5.0 installer report selects RetComm Clang 22.1.8 from PATH and fails
+on the SDK clock_time_conversion specializations. GNU dialect flags, working
+pthread detection and ignored fasync-exceptions strongly suggest a MinGW/GNU
+stdlib/ABI mismatch; the reporter's compiler target output is not yet available.
+ISO validation and code generation completed successfully.
+
+Check both Clang version and its default target. Skip non-x64/non-MSVC targets,
+old or broken compiler candidates and continue to standalone/Visual Studio LLVM.
+A CMake guard also refuses incompatible Windows builds. For clang++ the CMake
+MSVC frontend flag alone is insufficient: accept CMAKE_CXX_SIMULATE_ID=MSVC.
+Document selecting the Windows LLVM bin directory first in PATH and renaming a
+stale build folder after changing compilers.
+
+Validation: 75 tests discovered, 64 passed and 11 optional runtime/SDK/host
+integration tests skipped. Native pacing/layout compilers were enabled. Three
+new compiler-selection regressions cover MinGW-first fallback, wrong CPU/old
+version rejection and broken executables. Actual local Windows LLVM 23.1.3
+compiles the matched SDK chrono header; an isolated CMake compiler-detection
+probe accepts its x64 MSVC ABI. This is not a reproduction of RetComm on the
+reporter's machine and is not yet a rebuilt/published installer. Stable dist,
+high-refresh branch and GitHub release remain unchanged.
+
 ## v1.5.0 release validation - 2026-11-04
 
 Promote the community Windows integration to v1.5.0. All 72 regression checks

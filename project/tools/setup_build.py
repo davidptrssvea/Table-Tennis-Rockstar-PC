@@ -72,6 +72,30 @@ def find_sdk(path, offline):
     return sdk
 
 
+def find_windows_clang(candidates):
+    """The matched engine requires the x64 MSVC ABI, not MinGW/libstdc++."""
+    import re
+    for candidate in candidates:
+        if not candidate or not Path(candidate).is_file():
+            continue
+        try:
+            version = subprocess.check_output([str(candidate), '--version'], text=True,
+                                              stderr=subprocess.STDOUT, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        major = re.search(r'clang version (\d+)', version)
+        target = re.search(r'^Target:\s*(\S+)', version, re.MULTILINE)
+        if (major and int(major[1]) >= 19 and target
+                and re.fullmatch(r'x86_64-(?:pc-)?windows-msvc(?:[\d.]*)', target[1])):
+            return Path(candidate)
+        print(f'Skipping incompatible Clang: {candidate} '
+              f'(target {target[1] if target else "unknown"}; '
+              'requires Clang 19+ targeting x86_64-pc-windows-msvc).', flush=True)
+    raise ValueError('No compatible Windows x64 MSVC Clang 19+ found. '
+                     'Install official Windows LLVM or Visual Studio Clang. '
+                     'MinGW/GNU-targeting Clang is incompatible with the matched engine. See README.md.')
+
+
 def build_tools():
     candidates = []
     vswhere = Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')) / 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -89,17 +113,9 @@ def build_tools():
     if vs:
         clang_candidates += [str(vs / 'VC/Tools/Llvm/x64/bin/clang++.exe'),
                              str(vs / 'VC/Tools/Llvm/bin/clang++.exe')]
-    import re
-    clang = None
-    for candidate in clang_candidates:
-        if candidate and Path(candidate).is_file():
-            version = subprocess.check_output([candidate, '--version'], text=True)
-            match = re.search(r'clang version (\d+)', version)
-            if match and int(match[1]) >= 19:
-                clang = candidate
-                break
-    if not vs or not clang:
-        raise ValueError('Install Visual Studio 2022 C++ Build Tools (including Windows SDK, CMake and Ninja) and LLVM Clang 19+. See README.md.')
+    if not vs:
+        raise ValueError('Install Visual Studio 2022 C++ Build Tools (including Windows SDK, CMake and Ninja). See README.md.')
+    clang = find_windows_clang(clang_candidates)
     cmake = shutil.which('cmake') or str(vs / 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe')
     ninja = shutil.which('ninja') or str(vs / 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe')
     csc = Path(os.environ.get('WINDIR', r'C:\Windows')) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'

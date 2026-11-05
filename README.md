@@ -225,6 +225,16 @@ The **Table-Tennis-Source-v1.5.0.zip** asset is the source package for developer
 
 For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 **17.14 / MSVC v143 14.44 or newer** C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
+Windows builds require the **x64 MSVC target** (`clang++ --version` must report
+`Target: x86_64-pc-windows-msvc`). Clang bundled with MinGW/GNU-based launchers can
+have a newer version while using incompatible C++ headers/libraries. Errors such
+as `clock_time_conversion` undeclared, GNU `-std=gnu++23`, or pthread detection
+can indicate this mismatch. Install official Windows LLVM or Visual Studio Clang
+and put its `bin` directory before other Clang installations in the launching
+terminal's PATH. After changing compiler, rename the installation's `build`
+folder (for example to `build-old`) before retrying; keep `dist`, `user_data`,
+`.tools`, `project/generated` and your ISO.
+
 ```powershell
 .\setup.ps1 -IsoPath 'E:\Games\TableTennis.iso' -SdkPath 'E:\Tools\rexglue-sdk-0.10.0' -NoDownload
 ```

@@ -32,6 +32,40 @@ def synthetic_iso(directory_sector=40, directory_size=64):
     return image
 
 
+class WindowsCompilerTests(unittest.TestCase):
+    def test_mingw_on_path_falls_back_to_msvc_llvm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bad = Path(directory) / 'retcomm-clang.exe'
+            good = Path(directory) / 'llvm-clang.exe'
+            bad.touch(); good.touch()
+            def output(args, **kwargs):
+                target = 'x86_64-w64-windows-gnu' if args[0] == str(bad) else 'x86_64-pc-windows-msvc'
+                return 'clang version 22.1.8\nTarget: ' + target + '\n'
+            with mock.patch.object(setup_build.subprocess, 'check_output', side_effect=output):
+                self.assertEqual(setup_build.find_windows_clang([bad, good]), good)
+
+    def test_incompatible_targets_and_old_clang_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = Path(directory) / 'clang.exe'; candidate.touch()
+            for version, target in [(22, 'x86_64-w64-windows-gnu'),
+                                    (22, 'i686-pc-windows-msvc'),
+                                    (22, 'aarch64-pc-windows-msvc'),
+                                    (18, 'x86_64-pc-windows-msvc')]:
+                with self.subTest(version=version, target=target):
+                    with mock.patch.object(setup_build.subprocess, 'check_output',
+                                           return_value=f'clang version {version}.0\nTarget: {target}\n'):
+                        with self.assertRaisesRegex(ValueError, 'MSVC Clang'):
+                            setup_build.find_windows_clang([candidate])
+
+    def test_broken_candidate_does_not_hide_working_compiler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory) / 'broken.exe'; broken.touch()
+            good = Path(directory) / 'working.exe'; good.touch()
+            with mock.patch.object(setup_build.subprocess, 'check_output', side_effect=[
+                    OSError('cannot run compiler'), 'clang version 19.1.1\nTarget: x86_64-pc-windows-msvc\n']):
+                self.assertEqual(setup_build.find_windows_clang([broken, good]), good)
+
+
 class LocalBuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

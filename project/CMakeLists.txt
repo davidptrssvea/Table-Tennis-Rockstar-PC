@@ -5,6 +5,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(tabletennis LANGUAGES CXX)
 
+if(WIN32 AND (NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR
+    (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")))
+    message(FATAL_ERROR "The matched Windows engine requires x64 MSVC ABI. Use Windows LLVM Clang targeting x86_64-pc-windows-msvc, not MinGW/GNU Clang. After changing compilers, rename the build folder and configure again.")
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
