@@ -58,7 +58,7 @@ namespace TableTennisLauncher
 
         public MainWindow()
         {
-            Title = "ULTRAWIDE MENU TEST - Table Tennis";
+            Title = "Rockstar Games presents Table Tennis - Settings & Launcher";
             Width = 640;
             Height = Math.Min(860, SystemParameters.WorkArea.Height - 32);
             WindowStartupLocation = WindowStartupLocation.CenterScreen;

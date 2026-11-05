@@ -1,15 +1,12 @@
 # Rockstar Games presents Table Tennis — Windows PC Recompilation
 
-> **Unreleased ultrawide test:** legacy front-end menus use a centered 16:9
-> picture to preserve their mixed 2D/3D composition. Matches use the display's
-> aspect in Auto mode, or a separate 16:9 / 21:9 / 32:9 picture lock selected in
-> the launcher or PC SETTINGS (restart required). Pause keeps the match picture.
-> This branch requires the newly patched matched engine, including
-> `present_aspect_ratio`; do not replace only the game EXE in an older release.
-> Local developer tests pass the new SDK explicitly with `--sdk PATH`.
-> `engine.json` remains the last published release until release preparation
-> generates and pins the new engine asset. Nothing here changes v1.5.1 downloads.
-
+**v1.5.2 fixes ultrawide menu proportions and adds a separate picture-aspect
+selector.** Legacy front-end menus use their original centered 16:9 composition;
+matches follow the display in Auto mode, or fit a 16:9 / 21:9 / 32:9 picture lock
+with black bars. Set **PICTURE ASPECT RATIO** in the launcher or **PICTURE ASPECT**
+in PC SETTINGS and restart the game. Resolution and picture aspect are separate.
+Update the complete installation, including the newly matched engine; replacing
+only the game EXE is insufficient. Both online players should use the same release.
 
 Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **Gameplay is currently paced at 60 FPS in every mode. Actual 120/144/240 FPS gameplay is not unlocked.**
 
@@ -21,7 +18,7 @@ release updates. Online play and optional UPnP remain experimental.
 
 ## Get started
 
-1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.5.1/Install-Table-Tennis.exe)**.
+1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.5.2/Install-Table-Tennis.exe)**.
 2. Open it, choose your retail **Table Tennis ISO**, allow the required components, and click **Install**.
 3. When it says **Ready to play**, click **Play**. A desktop shortcut is also created when Windows permits it.
 
@@ -232,7 +229,7 @@ Locally generated files stay under the installation folder. Do not upload `dist`
 <details>
 <summary>Developer / advanced installation</summary>
 
-The **Table-Tennis-Source-v1.5.1.zip** asset is the source package for developers. It is not required by players using the installer.
+The **Table-Tennis-Source-v1.5.2.zip** asset is the source package for developers. It is not required by players using the installer.
 
 For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 **17.14 / MSVC v143 14.44 or newer** C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
@@ -258,7 +255,7 @@ Checks and source packaging:
 py -3 -m unittest discover -s tests -v
 py -3 project/tools/package_source.py --audit-index
 py -3 project/tools/package_source.py --output 'E:\ReleaseOutput'
-powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Source-v1.5.1.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
+powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Source-v1.5.2.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
 ```
 
 The installer builder validates every embedded source file against the public allowlist before compilation. It rejects extra or altered payload files. Native patch rules store offsets, hashes and replacement text rather than removed original function bodies. See [implementation and validation](reports/LOCAL_BUILD.md) and [changelog](CHANGELOG.md).

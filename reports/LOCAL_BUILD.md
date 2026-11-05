@@ -1,6 +1,6 @@
 # Local build and source distribution
 
-## Ultrawide legacy-menu and picture-aspect test - 2026-11-05 (unpublished)
+## v1.5.2 ultrawide legacy-menu and picture-aspect validation - 2026-11-05
 
 Reproduced the reported thin player models and menu band in a 32:9 window.
 Exploratory camera/Flash-transform changes did not correct every layer and were
@@ -35,10 +35,10 @@ new row was opened through Pause > Options and checked visually. A physical
 5120x1440 monitor and prolonged tournament/network sessions were not retested.
 
 Clean test: scratch/ultrawide-test/dist; private fixture: scratch/ultrawide-qa.
-The source branch is not published. Before releasing, prepare/sign the new
-matched engine asset and update engine.json; do not reuse the old engine download.
-Stable v1.5.0 game/engine fingerprint remains 1AA509A54594; GitHub latest stays
-v1.5.1 and the high-refresh test branch is unchanged.
+Release preparation packages/signs the newly matched engine and updates
+engine.json rather than reusing the old engine download. Stable local v1.5.0
+game/engine fingerprint remains 1AA509A54594; this publication does not update
+the real installation or the separate high-refresh test branch.
 
 ## Windows compiler target selection - 2026-11-05 (unpublished)
 

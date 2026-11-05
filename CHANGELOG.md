@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - ultrawide menu and picture-aspect test
+## v1.5.2 - 2026-11-05 - Ultrawide menus and picture aspect
 
 - Keep legacy front-end menus in their original centered 16:9 picture, avoiding
   squeezed 3D player previews and distorted menu bands on 32:9 displays.
