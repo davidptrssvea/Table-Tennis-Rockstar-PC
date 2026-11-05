@@ -10,7 +10,7 @@ release updates. Online play and optional UPnP remain experimental.
 
 ## Get started
 
-1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.5.0/Install-Table-Tennis.exe)**.
+1. Download **[Install-Table-Tennis.exe — installer](https://github.com/davidptrssvea/Table-Tennis-Rockstar-PC/releases/download/v1.5.1/Install-Table-Tennis.exe)**.
 2. Open it, choose your retail **Table Tennis ISO**, allow the required components, and click **Install**.
 3. When it says **Ready to play**, click **Play**. A desktop shortcut is also created when Windows permits it.
 
@@ -221,7 +221,7 @@ Locally generated files stay under the installation folder. Do not upload `dist`
 <details>
 <summary>Developer / advanced installation</summary>
 
-The **Table-Tennis-Source-v1.5.0.zip** asset is the source package for developers. It is not required by players using the installer.
+The **Table-Tennis-Source-v1.5.1.zip** asset is the source package for developers. It is not required by players using the installer.
 
 For manual builds, install 64-bit Python 3.10+, Visual Studio 2022 **17.14 / MSVC v143 14.44 or newer** C++ Build Tools with Windows SDK/CMake/Ninja, and Clang 19+. Clang can be standalone or included in Visual Studio. Then use:
 
@@ -247,7 +247,7 @@ Checks and source packaging:
 py -3 -m unittest discover -s tests -v
 py -3 project/tools/package_source.py --audit-index
 py -3 project/tools/package_source.py --output 'E:\ReleaseOutput'
-powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Source-v1.5.0.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
+powershell -File project/tools/build_installer.ps1 -SourceZip 'E:\ReleaseOutput\Table-Tennis-Source-v1.5.1.zip' -OutputPath 'E:\ReleaseOutput\Install-Table-Tennis.exe'
 ```
 
 The installer builder validates every embedded source file against the public allowlist before compilation. It rejects extra or altered payload files. Native patch rules store offsets, hashes and replacement text rather than removed original function bodies. See [implementation and validation](reports/LOCAL_BUILD.md) and [changelog](CHANGELOG.md).

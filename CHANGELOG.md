@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5.1 - 2026-11-05 - Windows installer compiler fix
+
+- Skip incompatible Clang compilers on PATH, including MinGW/GNU targets,
+  and select Clang 19+ targeting the Windows x64 MSVC ABI.
+- Continue searching when a compiler executable is broken or too old; report
+  the required compiler target before downloading/generating game files.
+- Refuse incompatible Windows ABI configurations in CMake and document
+  renaming a stale build folder when switching compilers.
+- Retain all v1.5.0 gameplay features and the same matched engine.
+  Experimental high-refresh work is not included.
+
 ## v1.5.0 - 2026-11-04 - the community update
 
 - Compare release version and exact engine bytes for friend invitations, allowing
