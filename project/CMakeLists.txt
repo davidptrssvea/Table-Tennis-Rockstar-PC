@@ -24,6 +24,7 @@ set(TABLETENNIS_SOURCES
     src/pc_features.cpp
     src/pc_settings.cpp
     src/photo_mode.cpp
+    src/native_res.cpp
     src/update_ui.cpp
     src/achievement_ui.cpp
     src/button_prompts.cpp
