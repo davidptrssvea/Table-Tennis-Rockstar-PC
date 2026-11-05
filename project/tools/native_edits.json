@@ -411,5 +411,51 @@
         "insert": "\t// PC PORT: runs once per frame while a match is being played (intro, serve,\n\t// points, transitions) and not in front-end menus (including the menu's\n\t// demo match), loading or pause: the \"in a match\" signal.\n\ttabletennis::pc::SetGameplay(true);\n"
       }
     ]
+  },
+  {
+    "name": "sub_82150500",
+    "input_sha256": "94551cc225e777ca04d2fba9eef5069aff19c58b5298f48205daef33eb171e6e",
+    "output_sha256": "bad0d7e349711052ae114d6599c1e7b88e93a8b6660e8997e8658995d285a557",
+    "edits": [
+      {
+        "offset": 2405,
+        "delete": 0,
+        "insert": "\tREX_STORE_U32(ctx.r1.u32 + 80, tabletennis::native::StripRects(base)); // NATIVE RES: room for more than 5 strips\n"
+      },
+      {
+        "offset": 4398,
+        "delete": 0,
+        "insert": "\tctx.r6.u64 = tabletennis::native::StripBudget(ctx.r6.u32); // NATIVE RES: taller strips in the larger EDRAM\n"
+      },
+      {
+        "offset": 13554,
+        "delete": 0,
+        "insert": "\tctx.r9.u64 = tabletennis::native::StripOrder(base); // NATIVE RES: strip order 0..63, not the game's five\n"
+      }
+    ]
+  },
+  {
+    "name": "sub_82150E28",
+    "input_sha256": "ba37905aa1f35dffdc1c06603620ff7a296d081edd1ef0c0a22ea50c78ab7e09",
+    "output_sha256": "e28c4a51bec196a8e8f320e196224b3bfe5093713e288c3de329bd641706d45d",
+    "edits": [
+      {
+        "offset": 1029,
+        "delete": 0,
+        "insert": "\tctx.r31.u64 = tabletennis::native::StripRects(base); // NATIVE RES: room for more than 5 strips\n"
+      }
+    ]
+  },
+  {
+    "name": "sub_82150A38",
+    "input_sha256": "f5c9da6474d55d0cc7b6d29b914e887245983045d28e41a5a82dc53562b96601",
+    "output_sha256": "62781b985b64971d0f73aeae72f0af682ec3bde64574895135f492154d7e9d5a",
+    "edits": [
+      {
+        "offset": 1249,
+        "delete": 0,
+        "insert": "\tctx.r30.u64 = tabletennis::native::StripRects(base); // NATIVE RES: room for more than 5 strips\n"
+      }
+    ]
   }
 ]

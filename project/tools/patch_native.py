@@ -49,6 +49,8 @@ def patch(folder):
         raise ValueError('No expected override functions found')
     # Photo mode overrides existing discovered functions; verify their registrations too.
     required |= {0x82153598, 0x821709F8, 0x82187BE8, 0x821B5A68, 0x823F9318, 0x82160698}
+    # Native resolution overrides (native_res.cpp).
+    required |= {0x82228F30, 0x8214F248}
     verify_function_table((folder / 'tabletennis_init.cpp').read_text(encoding='utf-8'), required)
     print(f'Verified {len(required)} required override registrations.', flush=True)
     rules = {r['name']: r for r in json.loads(Path(__file__).with_name('native_edits.json').read_text())}
@@ -67,7 +69,8 @@ def patch(folder):
         for namespace, include in (('tabletennis::intro::', 'intro_skip.h'),
                                    ('tabletennis::pacing::', 'frame_pacer.h'),
                                    ('tabletennis::pc::', 'pc_features.h'),
-                                   ('tabletennis::lan::', 'system_link.h')):
+                                   ('tabletennis::lan::', 'system_link.h'),
+                                   ('tabletennis::native::', 'native_res.h')):
             if namespace in updated and f'#include "{include}"' not in updated:
                 first_line, rest = updated.split('\n', 1)
                 updated = first_line + f'\n#include "{include}"\n' + rest
