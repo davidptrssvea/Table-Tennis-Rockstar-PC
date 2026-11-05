@@ -175,6 +175,72 @@ class Probe {static int Main(string[] a) {try {
         self.assertFalse(list((self.root / '.updates').rglob('*.download')))
         self.assertEqual((self.root / 'dist/tabletennis.exe').read_bytes(), b'installed version unchanged')
 
+    def test_existing_build_tools_modify_plan_matches_bootstrap(self):
+        probe = self.root / 'components.cs'
+        probe.write_text('''using System;using System.Reflection;using TableTennisUpdates;
+class Components {static int Main(string[] a) {try {
+ string path=a[0],channel=a[1];
+ if(path=="--discover") {
+  var found=(string[])typeof(UpdateCore).GetMethod("ExistingBuildTools",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,null);
+  path=found==null?null:found[0];channel=found==null?null:found[1];
+ }
+ Console.WriteLine(UpdateCore.BuildToolsArguments(path,channel));return 0;
+}catch(Exception e){Console.Error.WriteLine(e.Message);return 2;}}}''', encoding='utf-8')
+        executable = self.root / 'components.exe'
+        subprocess.run([str(self.csc), '/nologo', '/out:' + str(executable),
+                        '/r:' + str(self.helper), str(probe)], check=True)
+        # The helper assembly is looked up next to the probe, not in a global install.
+        import shutil
+        shutil.copy2(self.helper, self.root / self.helper.name)
+        script = self.root / 'components.ps1'
+        script.write_text('''param([string]$Source,[string]$Config)
+[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false)
+try {
+ $tokens=$null;$parseErrors=$null
+ $ast=[Management.Automation.Language.Parser]::ParseFile($Source,[ref]$tokens,[ref]$parseErrors)
+ if($parseErrors.Count) {throw ($parseErrors | Out-String)}
+ $functions=$ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-BuildToolsArguments','Get-ExistingBuildTools')},$true)
+ foreach($function in $functions) { . ([scriptblock]::Create($function.Extent.Text)) }
+ $case=Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
+ if($case.path -eq '--discover') {
+  $existing=Get-ExistingBuildTools
+  if($existing) {$case.path=$existing.installationPath;$case.channel=$existing.channelId}
+  else {$case.path='';$case.channel=''}
+ }
+ $arguments=Get-BuildToolsArguments $case.path $case.channel
+ [string]::Join(' ',[string[]]$arguments)
+} catch { [Console]::Error.WriteLine($_.Exception.Message);exit 2 }
+''', encoding='utf-8')
+        cases = [('', '', True),
+                 (r'C:\Program Files\VS 2022\BuildTools', 'VisualStudio.17.Release', True),
+                 (r'C:\VS LTSC' + chr(92), 'VisualStudio.17.Release.LTSC.17.10', True),
+                 ('relative', 'VisualStudio.17.Release', False),
+                 ('C:relative', 'VisualStudio.17.Release', False),
+                 ('C:\\VS" --quiet', 'VisualStudio.17.Release', False),
+                 (r'C:\VS', 'VisualStudio.17.Release --quiet', False),
+                 (r'C:\VS', 'VisualStudio.17.Release\n', False),
+                 ('--discover', '', True)]
+        for path, channel, valid in cases:
+            with self.subTest(path=path, channel=channel):
+                config = self.root / 'case.json'
+                config.write_text(json.dumps(dict(path=path, channel=channel)), encoding='utf-8')
+                cs = subprocess.run([str(executable), path, channel], capture_output=True, text=True, timeout=20)
+                ps = subprocess.run(['powershell.exe', '-NoProfile', '-File', str(script),
+                                     '-Source', str(ROOT / 'project/tools/bootstrap.ps1'), '-Config', str(config)],
+                                    capture_output=True, text=True, encoding='utf-8', timeout=20)
+                self.assertEqual(cs.returncode, 0 if valid else 2, cs.stderr)
+                self.assertEqual(ps.returncode, 0 if valid else 2, ps.stderr)
+                if valid:
+                    self.assertEqual(cs.stdout.strip(), ps.stdout.strip())
+                    args = cs.stdout.strip()
+                    self.assertIn('Microsoft.VisualStudio.Component.VC.Llvm.Clang', args)
+                    self.assertIn('Microsoft.VisualStudio.Component.VC.CMake.Project', args)
+                    if path and path!='--discover':
+                        self.assertTrue(args.startswith('modify --installPath "'))
+                        self.assertIn('--channelId ' + channel, args)
+                    elif not path:
+                        self.assertTrue(args.startswith('--passive'))
+
     def test_verified_package_download_does_not_install_it(self):
         result = subprocess.run([str(self.downloader), str(self.root), self.url + '/latest'],
                                 capture_output=True, text=True, timeout=15)

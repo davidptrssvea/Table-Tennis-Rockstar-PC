@@ -226,6 +226,16 @@ It then obtains the matched Windows engine based on ReXGlue SDK v0.10.0, checks 
 
 Locally generated files stay under the installation folder. Do not upload `dist`, `private_work` or `project/generated`.
 
+### Microsoft components: "Build Tools 2022 is already installed"
+
+If setup stops with component installation code 1 and the Microsoft log says
+**Visual Studio Build Tools 2022 is already installed**, open **Visual Studio
+Installer**, update the existing **Build Tools 2022** installation, then choose
+**Modify**. Select **Desktop development with C++**, including the Windows SDK,
+**C++ Clang Compiler for Windows** and **C++ CMake tools for Windows**. Complete
+that change and retry the game installer. An existing Build Tools installation
+may still lack these components. This does not require uninstalling Build Tools.
+
 <details>
 <summary>Developer / advanced installation</summary>
 

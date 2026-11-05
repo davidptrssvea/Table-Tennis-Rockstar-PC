@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased - existing Build Tools component repair
+
+- Detect an existing Visual Studio Build Tools 2022 instance without requiring
+  the C++ components that may be missing. Add required components with `modify`
+  and its exact installation path/channel, instead of attempting a duplicate install.
+- Apply the same command selection in the installer and updater, quote paths
+  containing spaces, and retain the fresh-install path when no instance exists.
+- Include the failed prerequisite check in setup logs and explain the manual
+  Update/Modify workaround when Microsoft setup fails.
+
 ## v1.5.2 - 2026-11-05 - Ultrawide menus and picture aspect
 
 - Keep legacy front-end menus in their original centered 16:9 picture, avoiding

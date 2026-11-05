@@ -257,6 +257,36 @@ namespace TableTennisUpdates {
             if(!Path.GetDirectoryName(python).Equals(pythonTarget,StringComparison.OrdinalIgnoreCase)) CopyTree(Path.GetDirectoryName(python),pythonTarget);
             return runner;
         }
+        public static string BuildToolsArguments(string installPath,string channelId) {
+            const string components="--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended "+
+                "--add Microsoft.VisualStudio.Component.VC.Llvm.Clang --add Microsoft.VisualStudio.Component.VC.CMake.Project";
+            if(string.IsNullOrEmpty(installPath)) return components;
+            if(!Path.IsPathRooted(installPath) || Path.GetPathRoot(installPath).Length<3 || installPath.IndexOfAny(new[]{'"','\r','\n'})>=0)
+                throw new InvalidDataException("Invalid Build Tools installation path.");
+            if(!Regex.IsMatch(channelId??"",@"\AVisualStudio\.17\.[A-Za-z0-9_.-]+\z"))
+                throw new InvalidDataException("Invalid Visual Studio 2022 channel.");
+            return "modify --installPath "+Quote(installPath.TrimEnd('\\'))+" --channelId "+channelId+" "+components;
+        }
+        static string[] ExistingBuildTools() {
+            string vswhere=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Microsoft Visual Studio","Installer","vswhere.exe");
+            if(!File.Exists(vswhere)) return null;
+            var info=new ProcessStartInfo(vswhere,"-latest -version [17.0,18.0) -products Microsoft.VisualStudio.Product.BuildTools -format json -utf8") {
+                UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,StandardOutputEncoding=Encoding.UTF8};
+            using(var process=Process.Start(info)) {
+                string output=process.StandardOutput.ReadToEnd();process.WaitForExit();
+                if(process.ExitCode!=0) throw new InvalidDataException("Could not discover existing Visual Studio Build Tools. Open Visual Studio Installer and retry.");
+                foreach(var instance in Json.Deserialize<List<Dictionary<string,object>>>(output)) {
+                    object path,channel,product,number;Version version;
+                    if(instance.TryGetValue("productId",out product) && (string)product=="Microsoft.VisualStudio.Product.BuildTools" &&
+                       instance.TryGetValue("installationVersion",out number) && Version.TryParse((string)number,out version) && version.Major==17 &&
+                       instance.TryGetValue("installationPath",out path) && Directory.Exists((string)path)) {
+                        if(!instance.TryGetValue("channelId",out channel)) throw new InvalidDataException("Existing Build Tools channel is missing. Open Visual Studio Installer and repair it.");
+                        return new[]{(string)path,(string)channel};
+                    }
+                }
+            }
+            return null;
+        }
         public static int InstallTools(string root) {
             string path=SafePath(root,".updates","components","vs_buildtools.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -270,9 +300,9 @@ namespace TableTennisUpdates {
                 UseShellExecute=false,CreateNoWindow=true})) {
                 verify.WaitForExit();if(verify.ExitCode!=0) throw new CryptographicException("The Microsoft installer signature could not be verified.");
             }
-            using(var process=Process.Start(new ProcessStartInfo(path,
-                "--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended "+
-                "--add Microsoft.VisualStudio.Component.VC.Llvm.Clang --add Microsoft.VisualStudio.Component.VC.CMake.Project") {
+            var existing=ExistingBuildTools();
+            string arguments=BuildToolsArguments(existing==null?null:existing[0],existing==null?null:existing[1]);
+            using(var process=Process.Start(new ProcessStartInfo(path,arguments) {
                 UseShellExecute=true,Verb="runas"})) {
                 process.WaitForExit();return process.ExitCode;
             }

@@ -1,5 +1,35 @@
 # Local build and source distribution
 
+## Existing Build Tools component repair - 2026-11-05 (unpublished)
+
+The reporter's dd_installer log establishes the cause of component exit code 1:
+Visual Studio Build Tools 2022 is already installed. The game installer invoked
+an implicit new installation rather than modifying that instance. The log also
+reports elevated execution; absence of a UAC prompt was not evidence of a denied
+permission request. Missing compiler/component details still require preflight.
+
+Both bootstrap.ps1 and UpdateCore.InstallTools now query vswhere for the latest
+17.x Build Tools product, without a C++ component requirement, and preserve its
+installation path and channel when issuing modify. Fresh installation remains
+available when no Build Tools instance is found. Arguments reject malformed
+paths/channels and quote spaces/trailing slashes consistently. Discovery failures
+stop rather than blindly starting another installation. No force/remove/cleanup
+operations or Windows security-setting changes are introduced. Old toolchains
+may still need updating in Visual Studio Installer before adding current Clang.
+
+Validation compiles and exercises the real production/test .NET updaters and
+PowerShell 5.1 functions extracted from a syntax-checked bootstrap AST. Ten
+updater client tests pass, including nine command cases: fresh/existing install,
+paths with spaces/trailing slash, LTSC channel preservation, malformed channel
+and relative/quoted path rejection, and read-only discovery on the local PC.
+Signature validation and update download regressions also pass. No Microsoft
+component installation, modification or elevation was executed during testing.
+The reporter's complete component installation remains unverified.
+
+This branch is not published; v1.5.2 assets, real dist and existing ZIPs are
+unchanged. Affected users can update their existing Build Tools 2022 and add the
+required C++/SDK/Clang/CMake components manually, then retry the game installer.
+
 ## v1.5.2 ultrawide legacy-menu and picture-aspect validation - 2026-11-05
 
 Reproduced the reported thin player models and menu band in a 32:9 window.

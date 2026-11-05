@@ -22,6 +22,44 @@ function Get-VerifiedDownload([string]$Url, [string]$Path, [string]$Sha256) {
     Move-Item -LiteralPath $temporary -Destination $Path -Force
 }
 
+function Get-BuildToolsArguments([string]$InstallPath, [string]$ChannelId) {
+    $arguments = @('--passive', '--wait', '--norestart', '--add', 'Microsoft.VisualStudio.Workload.VCTools',
+                   '--includeRecommended', '--add', 'Microsoft.VisualStudio.Component.VC.Llvm.Clang',
+                   '--add', 'Microsoft.VisualStudio.Component.VC.CMake.Project')
+    if ($InstallPath) {
+        if (-not [IO.Path]::IsPathRooted($InstallPath) -or ([IO.Path]::GetPathRoot($InstallPath)).Length -lt 3 -or $InstallPath -match '["\r\n]') { throw 'Invalid Build Tools installation path.' }
+        if ($ChannelId -notmatch '\AVisualStudio\.17\.[A-Za-z0-9_.-]+\z') { throw 'Invalid Visual Studio 2022 channel.' }
+        # Start-Process joins ArgumentList into a command line: keep paths with spaces quoted.
+        return @('modify', '--installPath', ('"' + $InstallPath.TrimEnd('\') + '"'), '--channelId', $ChannelId) + $arguments
+    }
+    return $arguments
+}
+function Get-ExistingBuildTools {
+    # Do not require C++ components: precisely those may be missing from an existing instance.
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { return $null }
+    $info = New-Object Diagnostics.ProcessStartInfo
+    $info.FileName = $vswhere
+    $info.Arguments = '-latest -version [17.0,18.0) -products Microsoft.VisualStudio.Product.BuildTools -format json -utf8'
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
+    $process = [Diagnostics.Process]::Start($info)
+    try {
+        $output = $process.StandardOutput.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) { throw 'Could not discover existing Visual Studio Build Tools. Open Visual Studio Installer and retry.' }
+        $instances = @($output | ConvertFrom-Json)
+        foreach ($instance in $instances) {
+            if ($instance.productId -eq 'Microsoft.VisualStudio.Product.BuildTools' -and
+                ([version]$instance.installationVersion).Major -eq 17 -and
+                (Test-Path -LiteralPath $instance.installationPath -PathType Container)) { return $instance }
+        }
+    } finally { $process.Dispose() }
+    return $null
+}
+
 try {
     $Root = [IO.Path]::GetFullPath($Root)
     $IsoPath = [IO.Path]::GetFullPath($IsoPath)
@@ -55,6 +93,7 @@ try {
     $checkExit = $LASTEXITCODE
     $ErrorActionPreference = $previousPreference
     if ($checkExit -ne 0 -and -not $PrepareOnly) {
+        $checkOutput | ForEach-Object { Write-Output ("Prerequisite check: " + $_) }
         if (-not $AllowToolInstall) { throw 'Required Microsoft components are missing. Allow their installation to continue.' }
         if ($NoDownload) { throw 'Microsoft components are missing and downloads are disabled.' }
         Stage 'Installing Microsoft components - approve the Windows permission prompt if shown'
@@ -64,15 +103,17 @@ try {
         if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
             throw 'The Microsoft installer signature could not be verified. It was not started.'
         }
-        $installArgs = @('--passive', '--wait', '--norestart', '--add', 'Microsoft.VisualStudio.Workload.VCTools',
-                         '--includeRecommended', '--add', 'Microsoft.VisualStudio.Component.VC.Llvm.Clang',
-                         '--add', 'Microsoft.VisualStudio.Component.VC.CMake.Project')
+        $existing = Get-ExistingBuildTools
+        if ($existing) {
+            Stage 'Adding required components to your existing Visual Studio Build Tools 2022'
+            $installArgs = Get-BuildToolsArguments $existing.installationPath $existing.channelId
+        } else { $installArgs = Get-BuildToolsArguments '' '' }
         $process = Start-Process -FilePath $bootstrap -ArgumentList $installArgs -Verb RunAs -WindowStyle Hidden -PassThru -Wait
         if ($process.ExitCode -eq 3010 -or $process.ExitCode -eq 1641) {
             Write-Output 'RESTART:Restart Windows, then open this installer again to finish.'
             exit 3010
         }
-        if ($process.ExitCode -ne 0) { throw ("Microsoft component installation did not complete (code " + $process.ExitCode + ').') }
+        if ($process.ExitCode -ne 0) { throw ("Microsoft component installation did not complete (code " + $process.ExitCode + '). Open Visual Studio Installer, update Visual Studio Build Tools 2022, then choose Modify to add C++ build tools, Windows SDK, Clang and CMake before retrying.') }
         & $python $builder --check-tools
         if ($LASTEXITCODE -ne 0) { throw 'Required components are still unavailable. Open the installation log for details.' }
     }
