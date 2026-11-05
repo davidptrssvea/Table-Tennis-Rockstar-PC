@@ -1,5 +1,45 @@
 # Local build and source distribution
 
+## Ultrawide legacy-menu and picture-aspect test - 2026-11-05 (unpublished)
+
+Reproduced the reported thin player models and menu band in a 32:9 window.
+Exploratory camera/Flash-transform changes did not correct every layer and were
+removed. The final implementation preserves the legacy menu's complete 16:9
+composition rather than independently transforming its mixed 2D/3D elements.
+The existing match-update function marks gameplay; the ready front-end callback
+restores menu context. Pause retains gameplay context. One new hash-verified
+native edit (sub_82160698) is added, bringing the count to 24 and required function
+registrations to 63. No high-refresh code or private test input is shipped.
+
+Add a separate Auto/display, 16:9, 21:9 or 32:9 picture-aspect preference to the
+launcher and PC SETTINGS (restart required). Native menus stay centered 16:9;
+matches use the chosen aspect. A core Presenter cvar overrides the guest display
+ratio and its existing letterboxing path fits locked pictures. No virtual methods
+or struct layouts change. The original SDK source/build was restored after making
+an isolated updated SDK; the last published engine and real dist were untouched.
+
+All 76 tests pass with native compiler, updated matched SDK, cached official
+Python and isolated retail-ISO startup enabled (116.380 seconds). New tests cover
+32:9 physical UI geometry at two resolutions, menu/game aspect policy and real WPF aspect
+settings save/reload while preserving unknown keys. All 94 public source files
+remain allowlisted; retail/generated/private data are excluded.
+
+Actual game checks used private controller injection, omitted from the clean
+EXE. 32:9 (1920x540 logical / 2880x810 physical at 150% DPI) reproduced the issue,
+then showed normal player models, menu band and centered controls. Exhibition
+switched to 32:9 with correct HUD proportions, paused correctly, and returned to
+the 16:9 main menu after Quit Game. Locked 21:9 in the same window visibly fit
+1260 logical pixels centered between 330-pixel black side areas. Photo Mode froze,
+zoomed to 1.62x, exported 1280x549 PNG and returned to play. PC SETTINGS with the
+new row was opened through Pause > Options and checked visually. A physical
+5120x1440 monitor and prolonged tournament/network sessions were not retested.
+
+Clean test: scratch/ultrawide-test/dist; private fixture: scratch/ultrawide-qa.
+The source branch is not published. Before releasing, prepare/sign the new
+matched engine asset and update engine.json; do not reuse the old engine download.
+Stable v1.5.0 game/engine fingerprint remains 1AA509A54594; GitHub latest stays
+v1.5.1 and the high-refresh test branch is unchanged.
+
 ## Windows compiler target selection - 2026-11-05 (unpublished)
 
 A v1.5.0 installer report selects RetComm Clang 22.1.8 from PATH and fails

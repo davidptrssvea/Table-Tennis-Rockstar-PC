@@ -1,5 +1,6 @@
 #include "generated/default/tabletennis_init.h"
 #include "intro_skip.h"
+#include "pc_features.h"
 #include "pc_settings.h"
 #include "achievement_ui.h"
 #include "button_prompts.h"
@@ -251,6 +252,8 @@ void FilterInput(PPCContext& ctx, uint8_t* base, uint32_t user, uint32_t state) 
 }
 
 void ObserveFrontend(PPCContext& ctx, uint8_t* base) {
+  const auto active_movie=REX_LOAD_U32(ctx.r4.u32+92);
+  if(active_movie && FrontendReady(ctx,base,active_movie)) tabletennis::pc::SetGameplay(false);
 #if defined(TT_COMMUNITY_NETWORK)
   tabletennis::lan::PollFrontend(ctx,base,REX_LOAD_U32(ctx.r4.u32+92));
 #endif

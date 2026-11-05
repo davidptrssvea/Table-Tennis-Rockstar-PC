@@ -112,6 +112,43 @@ class RelayValidationTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'nt', 'Windows .NET Framework launcher')
 class LauncherValidationTests(unittest.TestCase):
+    def test_picture_aspect_settings_round_trip(self):
+        csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+        with tempfile.TemporaryDirectory(prefix='Table Tennis refresh settings ') as directory:
+            folder = Path(directory)
+            launcher = folder / 'launcher.exe'
+            probe = folder / 'probe.cs'
+            probe.write_text('''using System;using System.IO;using System.Reflection;
+using System.Windows.Controls;
+class Probe {
+ [STAThread] static void Main(string[] args) {
+  string ini=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings.ini");
+  File.WriteAllText(ini,"future_setting=keep\\n");
+  Type t=Assembly.LoadFrom(args[0]).GetType("TableTennisLauncher.MainWindow");
+  var flags=BindingFlags.NonPublic|BindingFlags.Instance;
+  object first=Activator.CreateInstance(t);
+  Func<object,string,object> field=(obj,name)=>t.GetField(name,flags).GetValue(obj);
+  if(((ComboBox)field(first,"comboAspect")).SelectedIndex!=0) throw new Exception("Native aspect must be the default");
+  ((ComboBox)field(first,"comboAspect")).SelectedIndex=2;
+  t.GetMethod("SaveSettings",flags).Invoke(first,null);
+  string saved=File.ReadAllText(ini);
+  foreach(string expected in new[]{"display_aspect=21:9","future_setting=keep"})
+   if(!saved.Contains(expected)) throw new Exception("Setting not preserved: "+expected);
+  object second=Activator.CreateInstance(t);
+  if(((ComboBox)field(second,"comboAspect")).SelectedIndex!=2) throw new Exception("Aspect did not reload");
+  if((string)t.GetMethod("SelectedAspect",flags).Invoke(second,null)!="21:9") throw new Exception("CLI aspect differs from saved setting");
+  ((System.Windows.Window)second).Close();((System.Windows.Window)first).Close();
+ }
+}''', encoding='utf-8')
+            common = [str(csc), '/nologo', '/optimize', '/lib:' + str(csc.parent / 'WPF'),
+                      '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll']
+            subprocess.run(common + ['/target:winexe', '/out:' + str(launcher),
+                str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs'),
+                str(ROOT / 'project/launcher/GatewayLeaseRouter.cs')], check=True)
+            executable = folder / 'probe.exe'
+            subprocess.run(common + ['/target:exe', '/out:' + str(executable), str(probe)], check=True)
+            subprocess.run([str(executable), str(launcher)], check=True, timeout=10)
+
     def test_room_and_port_boundaries_match_protocol(self):
         csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
         with tempfile.TemporaryDirectory(prefix='Table Tennis launcher check ') as folder:

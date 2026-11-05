@@ -8,6 +8,7 @@ void ToggleAchievements();
 void SetAchievementsToggle(std::function<void()> callback);
 void SetWindow(void* window);
 void SetSurfaceSize(uint32_t width, uint32_t height);
+void SetGameplay(bool active);
 double CameraAspect(double original);
 double VideoAspect(double original);
 void FixUi(PPCContext& ctx, uint8_t* base, uint32_t matrix, double width);

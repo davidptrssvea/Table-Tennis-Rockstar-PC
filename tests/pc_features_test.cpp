@@ -8,7 +8,7 @@
 int main() {
   using namespace tabletennis::pc::layout;
   auto near=[](double a,double b){return std::abs(a-b)<1e-9;};
-  for(auto dims : {std::pair{1280,720},std::pair{2560,1080},std::pair{3440,1440},std::pair{3840,1600}}) {
+  for(auto dims : {std::pair{1280,720},std::pair{2560,1080},std::pair{3440,1440},std::pair{3840,1600},std::pair{5120,1440},std::pair{7680,2160}}) {
     const double aspect=Aspect(dims.first,dims.second),scale=UiScale(aspect);
     // Square UI artwork must occupy equal physical distances on both axes.
     assert(near(scale*dims.first/1280.0,dims.second/720.0));
@@ -16,6 +16,16 @@ int main() {
     assert(near(Camera(1.0,aspect),1.0)); // square/shadow cameras unchanged
     const double inset=(1-scale)*1280/2;
     assert(near(inset+scale*1280/2,640)); // safe area stays centered
+  }
+  assert(near(DisplayAspect(5120,1440,"16:9"),16.0/9.0));
+  assert(near(DisplayAspect(5120,1440,"21:9"),21.0/9.0));
+  assert(near(DisplayAspect(5120,1440,"auto"),32.0/9.0));
+  assert(near(DisplayAspect(1280,720,"32:9"),32.0/9.0));
+  for(auto mode:{"auto","16:9","21:9","32:9"}) {
+    assert(near(PictureAspect(5120,1440,mode,false),kBaseAspect));
+    assert(near(PictureAspect(5120,1440,mode,true),DisplayAspect(5120,1440,mode)));
+    // Returning from a match cannot leave the legacy character menu widened.
+    assert(near(Camera(kBaseAspect,PictureAspect(5120,1440,mode,false)),kBaseAspect));
   }
   assert(near(Aspect(0,0),kBaseAspect));
   assert(near(UiScale(Aspect(1024,768)),1));

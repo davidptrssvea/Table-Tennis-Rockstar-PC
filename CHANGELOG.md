@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased - ultrawide menu and picture-aspect test
+
+- Keep legacy front-end menus in their original centered 16:9 picture, avoiding
+  squeezed 3D player previews and distorted menu bands on 32:9 displays.
+- Switch matches back to their chosen picture aspect, preserving pause and
+  returning to the menu layout when the front-end becomes ready.
+- Add Auto/display, 16:9, 21:9 and 32:9 picture-aspect choices to the launcher
+  and PC SETTINGS, separately from resolution. Locks fit with black bars.
+- Add an engine presenter flag without changing its binary interface; a matched
+  updated engine is required. High-refresh experiments are not included.
+
 ## v1.5.1 - 2026-11-05 - Windows installer compiler fix
 
 - Skip incompatible Clang compilers on PATH, including MinGW/GNU targets,

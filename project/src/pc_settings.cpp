@@ -139,6 +139,7 @@ struct SettingsPage::State {
     {"show_fps","FPS / FRAME TIMES","Open the separate F10 timing window. Gameplay stays paced at 60 FPS.",{"false","true"},{"OFF","ON"}},
     {"button_prompts","BUTTON ICONS","AUTO follows the controller in use. Changes apply immediately.",{"auto","xbox","playstation"},{"AUTO","XBOX","PLAYSTATION"}},
     {"achievement_sound","ACHIEVEMENT SOUND","Play a sound when an achievement unlocks.",{"false","true"},{"OFF","ON"},1},
+    {"display_aspect","PICTURE ASPECT","AUTO follows the display. Locks preserve proportions with black bars. Applies after restart.",{ "auto","16:9","21:9","32:9" },{ "AUTO / DISPLAY","16:9","21:9","32:9" },0,true},
     {"updates","UPDATES","Check signed releases. Installation only starts after you approve it in the updater.",{""},{"CHECK NOW"}}
   };
   int row=0,repeat_direction=0;
@@ -162,7 +163,7 @@ SettingsPage::~SettingsPage() {
   REXLOG_INFO("Tabletennis: PC SETTINGS closed; game-only presentation restored");
 }
 void SettingsPage::Change(int delta) {
-  if(state_->row==7) {updates::Open();return;}
+  if(state_->rows[state_->row].key==std::string("updates")) {updates::Open();return;}
   auto& row=state_->rows[state_->row];
   row.selected=(row.selected+delta+int(row.values.size()))%int(row.values.size());
   const std::string value=row.values[row.selected];
@@ -200,11 +201,11 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   if(b&(8|4096)) Change(1);
   if((b&8192) && Save()) { Close();return; }
   const float s=io.DisplaySize.y/720.f,w=io.DisplaySize.x;
-  const float x=(w-920*s)/2,y=95*s,r=x+920*s;
+  const float x=(w-920*s)/2,y=75*s,r=x+920*s;
   auto* dl=ImGui::GetForegroundDrawList();
   dl->AddRectFilled({0,0},io.DisplaySize,IM_COL32(0,0,0,100));
   dl->AddRectFilled({x,y},{r,y+65*s},IM_COL32(30,56,75,255));
-  dl->AddRectFilled({x,y+70*s},{r,y+490*s},IM_COL32(12,13,16,190));
+  dl->AddRectFilled({x,y+70*s},{r,y+530*s},IM_COL32(12,13,16,190));
   auto text=[&](float px,float xx,float yy,ImU32 color,const char* value,bool heavy=true){
     auto* font=heavy?achievement_ui::HeadlineFont(px):achievement_ui::BodyFont();
     dl->AddText(font,px,{xx,yy},color,value);
@@ -226,7 +227,7 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
     const auto color=selected?IM_COL32(255,209,0,255):IM_COL32(205,207,211,255);
     text(23*s,x+28*s,yy,color,row.label);
     auto label=std::string(row.labels[row.selected])+(row.restart?" *":"");
-    if(i==7) {auto update=updates::GetStatus();if(update.state=="available") label="UPDATE "+update.version;}
+    if(std::string(row.key)=="updates") {auto update=updates::GetStatus();if(update.state=="available") label="UPDATE "+update.version;}
     auto* font=achievement_ui::HeadlineFont(23*s);
     auto size=font->CalcTextSizeA(23*s,FLT_MAX,0,label.c_str());
     text(23*s,r-28*s-size.x,yy,color,label.c_str());
@@ -234,16 +235,16 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
       state_->row=int(i);Change(1);
     }
   }
-  dl->PushClipRect({x+20*s,y+414*s},{r-20*s,y+484*s},true);
-  text(19*s,x+28*s,y+416*s,IM_COL32(220,220,220,255),state_->rows[state_->row].help,false);
-  text(18*s,x+28*s,y+449*s,IM_COL32(190,190,190,255),"* AFTER RESTART     |     FRAME PACING: 60 FPS",false);
+  dl->PushClipRect({x+20*s,y+454*s},{r-20*s,y+524*s},true);
+  text(19*s,x+28*s,y+456*s,IM_COL32(220,220,220,255),state_->rows[state_->row].help,false);
+  text(18*s,x+28*s,y+489*s,IM_COL32(190,190,190,255),"* AFTER RESTART     |     FRAME PACING: 60 FPS",false);
   dl->PopClipRect();
-  dl->AddRectFilled({x,y+495*s},{r,y+543*s},IM_COL32(205,208,210,255));
+  dl->AddRectFilled({x,y+535*s},{r,y+583*s},IM_COL32(205,208,210,255));
   const auto ink=IM_COL32(20,22,25,255);
-  prompts::DrawButtonLabel(dl,{x+24*s,y+519*s},21*s,ink,
+  prompts::DrawButtonLabel(dl,{x+24*s,y+559*s},21*s,ink,
                            "D-PAD: SELECT / CHANGE",achievement_ui::HeadlineFont(21*s));
   auto action=[&](float xx,const char* letter,const char* label,ImU32 color) {
-    ImVec2 center{xx,y+519*s};
+    ImVec2 center{xx,y+559*s};
     prompts::DrawButton(dl,center,13*s,color,letter,
                         achievement_ui::HeadlineFont(13*s*1.65f),1.f);
     prompts::DrawButtonLabel(dl,{xx+21*s,center.y},21*s,ink,label,
@@ -251,7 +252,7 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
   };
   action(x+415*s,"A","CHANGE",IM_COL32(90,186,40,255));
   action(x+640*s,"B","SAVE & BACK",IM_COL32(210,44,44,255));
-  if(!state_->error.empty()) text(16*s,x+12*s,y+552*s,IM_COL32(255,130,110,255),state_->error.c_str(),false);
+  if(!state_->error.empty()) text(16*s,x+12*s,y+592*s,IM_COL32(255,130,110,255),state_->error.c_str(),false);
 }
 }
 // Keep the original pause update intact, like the other guest callback wrappers.

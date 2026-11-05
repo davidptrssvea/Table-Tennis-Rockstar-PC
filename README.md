@@ -1,5 +1,16 @@
 # Rockstar Games presents Table Tennis — Windows PC Recompilation
 
+> **Unreleased ultrawide test:** legacy front-end menus use a centered 16:9
+> picture to preserve their mixed 2D/3D composition. Matches use the display's
+> aspect in Auto mode, or a separate 16:9 / 21:9 / 32:9 picture lock selected in
+> the launcher or PC SETTINGS (restart required). Pause keeps the match picture.
+> This branch requires the newly patched matched engine, including
+> `present_aspect_ratio`; do not replace only the game EXE in an older release.
+> Local developer tests pass the new SDK explicitly with `--sdk PATH`.
+> `engine.json` remains the last published release until release preparation
+> generates and pins the new engine asset. Nothing here changes v1.5.1 downloads.
+
+
 Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **Gameplay is currently paced at 60 FPS in every mode. Actual 120/144/240 FPS gameplay is not unlocked.**
 
 Build and play from **your own Xbox 360 disc image**. A graphical installer prepares the required components and creates the local game build for you.

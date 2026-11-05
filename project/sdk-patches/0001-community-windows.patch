@@ -3104,3 +3104,32 @@ index 2d13ac8..ec5abf3 100644
  }
  
  bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf, size_t len) {
+
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index 7360ed9..b311d80 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -32,6 +32,11 @@ REXCVAR_DEFINE_BOOL(host_present_from_non_ui_thread, true, "UI/Presenter",
+ REXCVAR_DEFINE_BOOL(present_letterbox, true, "UI/Presenter",
+                     "Enable letterboxing for non-native aspect ratios");
+-
++
++// Output aspect override without changing Presenter interfaces or mailbox layout.
++REXCVAR_DEFINE_STRING(present_aspect_ratio, "auto", "UI/Presenter",
++                      "Output aspect: auto, 16:9, 21:9 or 32:9")
++    .allowed({"auto", "16:9", "21:9", "32:9"});
++
+ REXCVAR_DEFINE_INT32(present_safe_area_x, 90, "UI/Presenter",
+                      "Horizontal safe area percentage (0-100)")
+     .range(0, 100);
+@@ -550,6 +555,10 @@ bool Presenter::RefreshGuestOutput(
+     uint32_t frontbuffer_width, uint32_t frontbuffer_height, uint32_t display_aspect_ratio_x,
+     uint32_t display_aspect_ratio_y,
+     std::function<bool(GuestOutputRefreshContext& context)> refresher) {
++  const auto forced_aspect = REXCVAR_GET(present_aspect_ratio);
++  if (forced_aspect == "16:9") { display_aspect_ratio_x = 16; display_aspect_ratio_y = 9; }
++  else if (forced_aspect == "21:9") { display_aspect_ratio_x = 21; display_aspect_ratio_y = 9; }
++  else if (forced_aspect == "32:9") { display_aspect_ratio_x = 32; display_aspect_ratio_y = 9; }
+   GuestOutputProperties& writable_properties =
+       guest_output_properties_[guest_output_mailbox_writable_];
+   writable_properties.frontbuffer_width = frontbuffer_width;

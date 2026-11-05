@@ -29,6 +29,7 @@ namespace TableTennisLauncher
                 else MessageBox.Show("An update was interrupted. Restore the updater support files or re-run the installer.","Table Tennis update");
                 return;
             }
+            RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
             var app = new Application();
             app.Run(new MainWindow {PlayAfterUpdate=Array.IndexOf(args,"--play-after-update")>=0});
         }
@@ -48,7 +49,7 @@ namespace TableTennisLauncher
         private TextBlock txtIsoStatus;
         private RadioButton rb720, rb1080, rb1440, rb4k, rbUltra;
         private CheckBox chkFullscreen, chkShowFps;
-        private ComboBox comboFps, comboUltra;
+        private ComboBox comboFps, comboUltra, comboAspect;
         private ComboBox comboAA, comboPost;
         private TextBlock txtStatus;
 
@@ -57,7 +58,7 @@ namespace TableTennisLauncher
 
         public MainWindow()
         {
-            Title = "Rockstar Games presents Table Tennis - Settings & Launcher";
+            Title = "ULTRAWIDE MENU TEST - Table Tennis";
             Width = 640;
             Height = Math.Min(860, SystemParameters.WorkArea.Height - 32);
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -189,6 +190,16 @@ namespace TableTennisLauncher
             Grid.SetRow(comboUltra, 2); Grid.SetColumn(comboUltra, 1);
             resGrid.Children.Add(rbUltra);resGrid.Children.Add(comboUltra);
             contentPanel.Children.Add(resGrid);
+
+            contentPanel.Children.Add(CreateSectionTitle("PICTURE ASPECT RATIO"));
+            comboAspect = new ComboBox { Height=26, Margin=new Thickness(0,4,0,6) };
+            comboAspect.Items.Add("Auto - follow display (including 32:9)");
+            comboAspect.Items.Add("Lock 16:9 - preserve picture, add black bars");
+            comboAspect.Items.Add("Lock 21:9 - preserve picture, add black bars");
+            comboAspect.Items.Add("Lock 32:9 - preserve picture, add black bars");
+            comboAspect.SelectedIndex=0;
+            contentPanel.Children.Add(comboAspect);
+            contentPanel.Children.Add(new TextBlock { Text="Separate from resolution. Fullscreen uses the monitor size; the aspect lock controls the game picture inside it.", TextWrapping=TextWrapping.Wrap, Foreground=Brushes.LightGray, FontSize=11, Margin=new Thickness(0,0,0,10) });
 
             // Section: Target Framerate / Refresh Rate
             var secFps = CreateSectionTitle("FRAME PACING");
@@ -943,12 +954,15 @@ namespace TableTennisLauncher
             parent.Children.Add(box); return box;
         }
 
+        private string SelectedAspect() { return comboAspect.SelectedIndex==1?"16:9":comboAspect.SelectedIndex==2?"21:9":comboAspect.SelectedIndex==3?"32:9":"auto"; }
+
         private void LoadSettings()
         {
             string buttons = "auto", server = "", player = "Player", room = "";
             bool network = false, checkUpdates = true;
             string iso = "";
             string res = "1080p";
+            string aspect = "auto";
             int framerate = 60;
             bool fullscreen = true;
             bool showFps = false;
@@ -967,6 +981,7 @@ namespace TableTennisLauncher
                         string val = parts[1].Trim();
                         if (key == "check_updates") bool.TryParse(val,out checkUpdates);
                         else if (key == "button_prompts") buttons = val;
+                        else if (key == "display_aspect") aspect = val;
                         else if (key == "online_server") server = val;
                         else if (key == "player_name") player = val;
                         else if (key == "room_code") room = val;
@@ -1027,6 +1042,7 @@ namespace TableTennisLauncher
             comboButtons.SelectedIndex = buttons == "xbox" ? 1 : buttons == "playstation" ? 2 : 0;
             txtServer.Text = server; txtPlayer.Text = player; txtRoom.Text = room;
             chkNetwork.IsChecked = HasCommunityEngine && network;
+            comboAspect.SelectedIndex=aspect=="16:9"?1:aspect=="21:9"?2:aspect=="32:9"?3:0;
             chkFullscreen.IsChecked = fullscreen;
             chkShowFps.IsChecked = showFps;
             chkAutoUpdates.IsChecked=checkUpdates;
@@ -1074,6 +1090,7 @@ namespace TableTennisLauncher
                 {
                     "iso_path=" + iso,
                     "resolution=" + res,
+                    "display_aspect=" + SelectedAspect(),
                     "framerate=" + targetFps,
                     "fullscreen=" + fullscreen.ToString().ToLower(),
                     "show_fps=" + showFps.ToString().ToLower(),
@@ -1199,6 +1216,7 @@ namespace TableTennisLauncher
                 "--game_data_root=\"{0}\" --resolution_scale={1} --draw_resolution_scale_x={1} --draw_resolution_scale_y={1} --window_width={2} --window_height={3} --fullscreen={4} --swap_post_effect={5} --present_effect={6} --show_fps={7} --framerate={8} --protect_zero=false --gpu_allow_invalid_fetch_constants=true",
                 selectedIso, resScale, width, height, isFullscreen.ToString().ToLower(), aa, post, showFps.ToString().ToLower(), targetFps);
 
+            args += " --display_aspect="+SelectedAspect();
             args += " --button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto");
             if (HasCommunityEngine) {
                 args += " --online=off --system_link=" + (chkNetwork.IsChecked == true).ToString().ToLower();

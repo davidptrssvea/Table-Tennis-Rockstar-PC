@@ -229,7 +229,7 @@ class TabletennisApp : public rex::ReXApp {
           auto value = line.substr(separator + 1);
           while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) value.pop_back();
           std::string flag;
-          if (key == "button_prompts" || key == "achievement_sound" || key == "show_fps") flag = key;
+          if (key == "button_prompts" || key == "achievement_sound" || key == "show_fps" || key == "display_aspect") flag = key;
 #if defined(TT_COMMUNITY_NETWORK)
           else if (key == "system_link" && (value == "true" || value == "false")) flag = key;
           else if (key == "online_server" || key == "room_code") flag = key;
@@ -284,6 +284,13 @@ class TabletennisApp : public rex::ReXApp {
     if (config.gpu_plugin.empty()) {
       config.gpu_plugin = "xenos";
     }
+
+    const auto picture_aspect=rex::cvar::GetFlagByName("display_aspect");
+    if(!rex::cvar::SetFlagByName("present_aspect_ratio","16:9")) {
+      throw std::runtime_error("Aspect locking requires the matching updated engine. Update the whole installation, including rexruntime.dll.");
+    }
+    rex::cvar::SetFlagByName("present_letterbox","true");
+    REXLOG_INFO("Picture aspect mode: {}",picture_aspect);
 
     // Preserve the reported retail mode. With guest vsync off the SDK uses
     // a 1 kHz VBlank worker; the host pacer independently limits submissions.
@@ -453,7 +460,7 @@ class TabletennisApp : public rex::ReXApp {
       tabletennis::pc::SetWindow(window()->GetNativeWindowHandle());
       tabletennis::pc::SetSurfaceSize(window()->GetActualPhysicalWidth(),window()->GetActualPhysicalHeight());
     }
-    rex::cvar::SetFlagByName("present_letterbox", "false");
+
     REXLOG_INFO("Tabletennis: loaded GPU timing flags: vsync={}, tearing={}",
                 rex::cvar::GetFlagByName("vsync"),
                 rex::cvar::GetFlagByName("d3d12_allow_variable_refresh_rate_and_tearing"));

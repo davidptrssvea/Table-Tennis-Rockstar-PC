@@ -399,5 +399,17 @@
         "insert": ");\n\ttabletennis::pc::Scissor(ctx"
       }
     ]
+  },
+  {
+    "name": "sub_82160698",
+    "input_sha256": "81581643b9cefbc2fa5942b3dc540ddc0bcd316eab2aedbf0926c626e60b771c",
+    "output_sha256": "3aa8b62727740838cfd1456db13a5370d744b69ef66c01c4ff195d0aada2cd81",
+    "edits": [
+      {
+        "offset": 70,
+        "delete": 0,
+        "insert": "\t// PC PORT: runs once per frame while a match is being played (intro, serve,\n\t// points, transitions) and not in front-end menus (including the menu's\n\t// demo match), loading or pause: the \"in a match\" signal.\n\ttabletennis::pc::SetGameplay(true);\n"
+      }
+    ]
   }
 ]

@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <mutex>
 #include <rex/logging.h>
+#include <rex/cvar.h>
 namespace tabletennis::pc {
 namespace {
 std::atomic<HWND> game_window{nullptr};
@@ -18,6 +19,19 @@ std::mutex toggle_mutex;
 std::function<void()> achievement_toggle;
 std::atomic<bool> quit_posted{false};
 std::atomic<double> aspect{16.0 / 9.0};
+std::atomic<bool> gameplay{false};
+std::atomic<uint64_t> surface{(uint64_t(1280)<<32)|720};
+std::mutex display_mutex;
+void ApplyDisplay() {
+  std::lock_guard lock(display_mutex);
+  const auto size=surface.load();const bool match=gameplay.load();
+  const auto mode=rex::cvar::GetFlagByName("display_aspect");
+  aspect.store(layout::PictureAspect(uint32_t(size>>32),uint32_t(size),mode,match));
+  const auto output=match?mode:std::string("16:9");
+  rex::cvar::SetFlagByName("present_aspect_ratio",output);
+  rex::cvar::SetFlagByName("present_letterbox",output=="auto"?"false":"true");
+}
+
 std::atomic<uint32_t> device{0};
 struct Clip { uint32_t device; int left,top,right,bottom; std::array<int,4> old; };
 thread_local std::vector<Clip> clips;
@@ -41,15 +55,18 @@ void SetAchievementsToggle(std::function<void()> callback) {
   std::lock_guard lock(toggle_mutex);achievement_toggle=std::move(callback);
 }
 void SetSurfaceSize(uint32_t width, uint32_t height) {
-  if(!width || !height) return; // keep the last valid ratio while minimized
-  aspect.store(layout::Aspect(width,height));
-  static uint64_t last=0;
-  const uint64_t size=(uint64_t(width)<<32)|height;
-  if(size!=last) {last=size;REXLOG_INFO("Display surface: {}x{}; camera aspect {:.6f}",width,height,aspect.load());}
+  if(!width || !height) return;
+  const auto old=surface.exchange((uint64_t(width)<<32)|height);
+  ApplyDisplay();
+  if(old!=surface.load()) REXLOG_INFO("Display surface: {}x{}; picture aspect {:.6f}",width,height,aspect.load());
 }
-double CameraAspect(double original) {
-  return layout::Camera(original,Aspect());
+void SetGameplay(bool active) {
+  if(gameplay.exchange(active)==active) return;
+  ApplyDisplay();
+  REXLOG_INFO("Picture context: {}; aspect {:.6f}",active?"gameplay":"menu",aspect.load());
 }
+double CameraAspect(double original) { return layout::Camera(original,Aspect()); }
+
 double VideoAspect(double original) { return original / layout::UiScale(Aspect()); }
 void FixUi(PPCContext& ctx, uint8_t* base, uint32_t matrix, double width) {
   const float scale = float(layout::UiScale(Aspect()));
