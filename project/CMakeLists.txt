@@ -22,6 +22,7 @@ set(TABLETENNIS_SOURCES
     src/update_ui.cpp
     src/achievement_ui.cpp
     src/button_prompts.cpp
+    src/game_timer.cpp
 )
 
 if(WIN32)

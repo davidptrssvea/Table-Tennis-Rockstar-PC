@@ -67,7 +67,8 @@ def patch(folder):
         for namespace, include in (('tabletennis::intro::', 'intro_skip.h'),
                                    ('tabletennis::pacing::', 'frame_pacer.h'),
                                    ('tabletennis::pc::', 'pc_features.h'),
-                                   ('tabletennis::lan::', 'system_link.h')):
+                                   ('tabletennis::lan::', 'system_link.h'),
+                                   ('tabletennis::timing::', 'game_timer.h')):
             if namespace in updated and f'#include "{include}"' not in updated:
                 first_line, rest = updated.split('\n', 1)
                 updated = first_line + f'\n#include "{include}"\n' + rest

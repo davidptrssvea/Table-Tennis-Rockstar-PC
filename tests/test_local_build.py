@@ -181,7 +181,7 @@ class RuntimeIsoTests(unittest.TestCase):
                     self.assertNotIn('--game_data_root does not exist', log)
                     self.assertIn('TabletennisOfflineMenu', log, log[-6000:])
                     if source != 'settings':
-                        self.assertIn('framerate 144 requested; pacing at 60', log)
+                        self.assertIn('FramePacer: target 144 FPS', log)
                         self.assertIn('loaded GPU timing flags: vsync=false, tearing=false', log)
                     else:
                         self.assertIn('loaded GPU timing flags: vsync=false, tearing=true', log)

@@ -1,5 +1,29 @@
 [
   {
+    "name": "sub_82160698",
+    "input_sha256": "81581643b9cefbc2fa5942b3dc540ddc0bcd316eab2aedbf0926c626e60b771c",
+    "output_sha256": "3b78945f7c503404fd4bb5254cf920b335808aab9b91a17bbd5ce6df79252b55",
+    "edits": [
+      {
+        "offset": 70,
+        "delete": 0,
+        "insert": "\t// PC PORT: runs once per frame while a match is being played (intro, serve,\n\t// points, transitions) and not in front-end menus (including the menu's\n\t// demo match), loading or pause: the \"in a match\" signal.\n\ttabletennis::pacing::NoteMatchFrame();\n"
+      }
+    ]
+  },
+  {
+    "name": "sub_82187BE8",
+    "input_sha256": "3e23fd8fd21e31d3e76d88eab7b0f8e100c571cb32b346006c0a893d32b9041e",
+    "output_sha256": "fd289f98d72b75fd36d49d13c70ff0cad4a3b2bffc8b2df0e34d3607e0d5a3e7",
+    "edits": [
+      {
+        "offset": 75,
+        "delete": 0,
+        "insert": "\t// PC PORT: the timer runs in fixed-step mode (+52), advancing game time by\n\t// the step in +28 (1/60 s) every frame. While running above 60 FPS set the\n\t// step to the length of the previous frame; at 60 the original is restored.\n\t{\n\t\tuint32_t step_bits;\n\t\tif (tabletennis::timing::StepOverride(ctx.r3.u32, REX_LOAD_U32(ctx.r3.u32 + 52),\n\t\t                                      REX_LOAD_U32(ctx.r3.u32 + 28), &step_bits)) {\n\t\t\tREX_STORE_U32(ctx.r3.u32 + 28, step_bits);\n\t\t}\n\t}\n"
+      }
+    ]
+  },
+  {
     "name": "sub_821CA3F0",
     "input_sha256": "b2b41ea935e80479ea3819a2eff7ae0ac7d1e94fd5931d53dd687929011cb97e",
     "output_sha256": "71dc9c58cc0dc536a52054304e7d2f45b3a1544aa4b761681b057cfdf8babe69",
@@ -251,6 +275,18 @@
         "offset": 54,
         "delete": 0,
         "insert": "\tif (tabletennis::intro::AdvanceFrontendMovie(ctx, base)) return;\n"
+      }
+    ]
+  },
+  {
+    "name": "sub_823FDC00",
+    "input_sha256": "9e19230ea4af1c58577f43e257a27cff3e9f5178b6af34f136c619ac59ab03c3",
+    "output_sha256": "4361400f796ce49582e12af4e4d7db541ab9ace2e7bd42d1e3573f60728127eb",
+    "edits": [
+      {
+        "offset": 70,
+        "delete": 0,
+        "insert": "\t// PC PORT: a menu/popup movie is being opened (help tips, pause menu,\n\t// end-of-match screens; never during match play). Those menus read the\n\t// game timer as they are built, so restore its original step first.\n\ttabletennis::pacing::OnPopupOpening(base);\n"
       }
     ]
   },

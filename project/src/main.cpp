@@ -6,7 +6,9 @@
 #include "system_link.h"
 
 REXCVAR_DEFINE_BOOL(show_fps, false, "UI", "Show in-game FPS counter");
-REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 144, 240, 0=unlimited)");
+REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 144, 240, 0=unlimited; above 60 is experimental)");
+REXCVAR_DEFINE_BOOL(variable_timestep, true, "Video", "Above 60 FPS, advance game time by the measured frame time instead of a fixed 1/60 s per frame (experimental)");
+REXCVAR_DEFINE_BOOL(high_fps_match_only, false, "Video", "Above 60 FPS, run matches at the target and front-end menus, videos, loading and the pause menu at 60 (experimental)");
 REXCVAR_DEFINE_BOOL(frame_log, false, "Video", "Write every game frame and present time to frametimes.csv next to the executable");
 REXCVAR_DEFINE_BOOL(allow_tearing, true, "Video", "Present without waiting for display refresh. Off can drop the game below 60 FPS: a blocked present stalls GPU emulation");
 

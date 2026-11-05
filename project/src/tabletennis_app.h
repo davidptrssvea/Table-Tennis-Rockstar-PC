@@ -15,6 +15,7 @@
 #include "frame_pacer.h"
 #include "stats_window.h"
 #include "photo_mode.h"
+#include "game_timer.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -44,6 +45,8 @@ REXCVAR_DECLARE(bool, show_fps);
 REXCVAR_DECLARE(int32_t, framerate);
 REXCVAR_DECLARE(bool, allow_tearing);
 REXCVAR_DECLARE(bool, frame_log);
+REXCVAR_DECLARE(bool, variable_timestep);
+REXCVAR_DECLARE(bool, high_fps_match_only);
 
 // Startup-only ImGui work: gamepad polling during the intro and the loading
 // transition. While any ImGui dialog is attached the presenter repaints on
@@ -219,6 +222,9 @@ class TabletennisApp : public rex::ReXApp {
               REXLOG_INFO("TabletennisApp: Target framerate from settings.ini: {} FPS", target);
             }
           } catch (...) {}
+        } else if (line.rfind("high_fps_match_only=", 0) == 0 &&
+                   rex::cvar::GetFlagSource("high_fps_match_only") < rex::cvar::Source::kCommandLine) {
+          REXCVAR_SET(high_fps_match_only, line.compare(20, 4, "true") == 0);
         } else if (line.rfind("allow_tearing=", 0) == 0 &&
                    rex::cvar::GetFlagSource("allow_tearing") < rex::cvar::Source::kCommandLine) {
           REXCVAR_SET(allow_tearing, line.compare(14, 4, "true") == 0);
@@ -304,10 +310,21 @@ class TabletennisApp : public rex::ReXApp {
     SetPluginFlag("d3d12_allow_variable_refresh_rate_and_tearing", tearing ? "true" : "false");
     // Guest "vsync" off in every mode: with it on, the SDK command processor
     // sleeps >= 1 ms on every GPU wait and the game falls to 30-48 FPS. The
-    // guest vblank then runs at 1 kHz and frame_pacer holds 60.
+    // guest vblank then runs at 1 kHz and frame_pacer holds the target rate.
     SetPluginFlag("vsync", "false");
-    REXLOG_INFO("TabletennisApp::OnPreSetup - 60 FPS, host-paced, tearing {}",
-                tearing ? "allowed" : "off");
+    if (target_hz != 60) {
+      // At 60 the game keeps its original fixed 1/60 s timer step.
+      const bool variable_step = REXCVAR_GET(variable_timestep);
+      const bool match_only = REXCVAR_GET(high_fps_match_only);
+      tabletennis::pacing::SetMatchOnly(match_only, variable_step);
+      REXLOG_WARN("TabletennisApp::OnPreSetup - Experimental {} FPS mode{}: {} timer step; tearing {}",
+                  target_hz, match_only ? " in matches only (60 elsewhere)" : "",
+                  variable_step ? "variable" : "fixed (game runs faster)",
+                  tearing ? "allowed" : "off");
+    } else {
+      REXLOG_INFO("TabletennisApp::OnPreSetup - 60 FPS, host-paced, tearing {}",
+                  tearing ? "allowed" : "off");
+    }
 
     REXLOG_INFO("TabletennisApp::OnPreSetup - GPU plugin: {}, protect_zero: false", config.gpu_plugin);
   }

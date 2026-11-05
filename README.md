@@ -1,6 +1,6 @@
 # Rockstar Games presents Table Tennis — Windows PC Recompilation
 
-Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **Gameplay is currently paced at 60 FPS in every mode. Actual 120/144/240 FPS gameplay is not unlocked.**
+Bring the Xbox 360 classic to your PC with **up to 4K output, higher internal 3D resolution, and optional image filters**. The game code is recompiled to native Windows x64 with ReXGlue SDK v0.10.0 and DirectX 12 rendering. **60 FPS is the recommended, original timing. 120/144/240 FPS gameplay is available as an experimental option.**
 
 Build and play from **your own Xbox 360 disc image**. A graphical installer prepares the required components and creates the local game build for you.
 
@@ -175,7 +175,7 @@ ONLINE / SYSTEM LINK mode to play with a friend.
 
 ### High-refresh display options
 
-Use **60 FPS** for normal play. Retained 120/144/240/no-cap selections are currently paced at 60 as well, preserving normal game speed until game-timer changes are independently verified. Guest VSync is disabled through the late-loaded GPU plugin, and the single host limiter controls submission timing. Tearing is allowed by default; this can reduce blocking in GPU emulation but visible tearing depends on the display configuration.
+Use **60 FPS** for normal play. The 120/144/240/no-cap selections are experimental: above 60 the game's fixed 1/60 s timer step follows the measured frame time so the game keeps its normal speed. An optional launcher setting keeps menus, loading, videos and the pause menu at 60 and runs only matches at the higher rate. If a driver frame cap or forced V-Sync limits presentation, the game follows it. Guest VSync is disabled through the late-loaded GPU plugin, and the single host limiter controls submission timing. Tearing is allowed by default; this can reduce blocking in GPU emulation but visible tearing depends on the display configuration.
 
 F10 opens a separate native statistics window with submission rate, average/p99/worst intervals and a frame-time graph. DXGI Present-call intervals are shown separately. These measure host calls, not physical scanout, GPU render duration or a guarantee of unique completed images. Earlier high-FPS claims based on ImGui redraw counts were unsupported. On a fixed-refresh display, a 60 Hz mode or integer multiple such as 120 Hz matches 60 FPS cadence more evenly than 144 Hz.
 

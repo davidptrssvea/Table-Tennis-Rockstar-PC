@@ -38,6 +38,7 @@ FIXED_FILES = {
     'tests/test_online_validation.py', 'tests/test_host_session.py', 'tests/test_security_review.py', 'tests/button_prompts_probe.cpp',
     'project/src/screen_layout.h', 'tests/pc_features_test.cpp',
     'project/src/stats_window.cpp', 'project/src/stats_window.h',
+    'project/src/game_timer.cpp', 'project/src/game_timer.h',
     'project/sdk-overrides/rex/platform/fpscr.h', 'project/sdk-overrides/rex/ppc/context.h',
     'project/sdk-overrides/rex_app.cpp',
     'project/tools/disc_image.py', 'project/tools/patch_menu.py', 'project/tools/patch_native.py',

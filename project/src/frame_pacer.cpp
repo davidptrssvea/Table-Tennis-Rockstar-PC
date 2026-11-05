@@ -3,7 +3,7 @@
 // With guest vsync off the guest vblank interrupt runs at 1 kHz, so the game
 // renders as fast as it can. BeforeSwap, on the guest render thread at the
 // start of each D3D Swap (before the frame is kicked to the GPU), holds the
-// game to 60 FPS with absolute deadlines on a high-resolution timer.
+// game to the target rate with absolute deadlines on a high-resolution timer.
 //
 // A DXGI Present hook only measures: it records when frames actually reach
 // the swap chain. Holding presents back was tried and made pacing worse,
@@ -11,6 +11,8 @@
 
 #include "frame_pacer.h"
 #include "frame_schedule.h"
+
+#include "game_timer.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -28,6 +30,7 @@
 #include <chrono>
 #include <cstdio>
 #include <mutex>
+#include <string>
 #include <vector>
 #if defined(_M_X64) || defined(__x86_64__)
 #include <immintrin.h>
@@ -52,6 +55,35 @@ int64_t NowNs() {
 
 int32_t g_target_fps = 60;
 std::atomic<int> g_ui_active{0};
+
+// Above 60 FPS, set while something outside the game (a driver frame cap, or
+// V-Sync forced in the driver) holds presents back. The game then stops
+// pacing itself and lets that limiter set the rate, like other PC games;
+// pacing to its own clock as well made the two fight (presents at 141/s with
+// the game at 144/s doubled every few frames to ~14 ms).
+std::atomic<bool> g_external_limit{false};
+
+// "High frame rate in matches only": a match (from the final start
+// confirmation: intro, serve, points, transitions) runs at the target;
+// front-end menus, videos, loading and the pause menu run at exactly 60 with
+// the game's original 1/60 s timer step, as at native 60. Those parts advance
+// once per frame and ran too fast above 60. NoteMatchFrame is called once per
+// frame by the game's match update (native edit in sub_82160698).
+std::atomic<bool> g_match_only{false};
+std::atomic<bool> g_variable_step{false};
+std::atomic<int64_t> g_last_match_ns{0};
+std::atomic<bool> g_high_rate{true};
+// Stay at the high rate through short gaps in the match update (a slow
+// frame); a pause menu switches to 60 once it is up.
+constexpr int64_t kMatchHoldNs = 400'000'000;
+// Set by a Start press in a high-rate match; cleared when the match update
+// resumes after a gap (the pause is over).
+std::atomic<bool> g_paused_by_start{false};
+uint16_t g_prev_buttons[4] = {};
+
+// True while frames run above 60 FPS (the only time an external limiter is
+// tracked; at 60 the game keeps its own exact clock).
+bool HighRateActive() { return g_target_fps > 60 && g_high_rate.load(); }
 
 // ---- Measurement ----------------------------------------------------------
 
@@ -185,6 +217,7 @@ void SleepUntil(const Timer& timer, int64_t deadline_ns) {
 struct PacerState {
   Timer timer;
   Schedule schedule;
+  int64_t last_submit_ns = 0;
   int64_t last_log_ns = 0;
 };
 
@@ -202,6 +235,62 @@ PresentFn g_original_present = nullptr;
 Present1Fn g_original_present1 = nullptr;
 int64_t g_present_last_log_ns = 0;
 
+// Average time Present spends blocked, per one-second window, decides whether
+// an external limiter is in charge. With tearing allowed and nothing else
+// limiting, Present returns in well under a millisecond.
+constexpr double kEnterFollowMs = 1.0;
+constexpr double kLeaveFollowMs = 0.3;
+// Leave follow mode only after this many quiet windows in a row: when the
+// game itself briefly runs no faster than the cap, presents stop blocking for
+// a moment, and switching back to its own clock then caused a hitch.
+constexpr int kLeaveFollowWindows = 5;
+int g_quiet_windows = 0;
+int64_t g_block_window_start_ns = 0;
+double g_block_sum_ms = 0.0;
+uint32_t g_block_count = 0;
+
+void RecordPresentBlock(int64_t start_ns, int64_t end_ns) {
+  if (!HighRateActive() || g_ui_active.load()) {
+    // At 60 the game must keep its own exact clock (its simulation advances
+    // once per frame). While an ImGui dialog is attached the presenter also
+    // repaints every refresh, so its presents are not a useful signal.
+    g_block_window_start_ns = 0;
+    return;
+  }
+  if (!g_block_window_start_ns) {
+    g_block_window_start_ns = start_ns;
+    g_block_sum_ms = 0.0;
+    g_block_count = 0;
+  }
+  g_block_sum_ms += double(end_ns - start_ns) / 1e6;
+  ++g_block_count;
+  if (end_ns - g_block_window_start_ns < 1'000'000'000LL) {
+    return;
+  }
+  const double avg_ms = g_block_sum_ms / g_block_count;
+  const bool was_following = g_external_limit.load();
+  bool follow = was_following;
+  if (!was_following) {
+    follow = avg_ms > kEnterFollowMs;
+  } else {
+    g_quiet_windows = avg_ms < kLeaveFollowMs ? g_quiet_windows + 1 : 0;
+    follow = g_quiet_windows < kLeaveFollowWindows;
+  }
+  if (follow != was_following) {
+    g_quiet_windows = 0;
+    g_external_limit = follow;
+    if (follow) {
+      REXLOG_INFO("FramePacer: presents blocked {:.2f} ms on average: an external limiter "
+                  "(driver frame cap or V-Sync) is pacing the game; not pacing to {} FPS",
+                  avg_ms, g_target_fps);
+    } else {
+      REXLOG_INFO("FramePacer: presents blocked {:.2f} ms on average: no external limiter; "
+                  "pacing to {} FPS again", avg_ms, g_target_fps);
+    }
+  }
+  g_block_window_start_ns = 0;
+}
+
 void RecordPresent(UINT flags) {
   const int64_t now = NowNs();
   g_present_history.Record(now);
@@ -214,7 +303,10 @@ HRESULT STDMETHODCALLTYPE HookPresent(IDXGISwapChain* swap_chain, UINT sync, UIN
     return g_original_present(swap_chain, sync, flags);
   }
   RecordPresent(flags);
-  return g_original_present(swap_chain, sync, flags);
+  const int64_t start = NowNs();
+  HRESULT result = g_original_present(swap_chain, sync, flags);
+  RecordPresentBlock(start, NowNs());
+  return result;
 }
 
 HRESULT STDMETHODCALLTYPE HookPresent1(IDXGISwapChain1* swap_chain, UINT sync, UINT flags,
@@ -223,7 +315,10 @@ HRESULT STDMETHODCALLTYPE HookPresent1(IDXGISwapChain1* swap_chain, UINT sync, U
     return g_original_present1(swap_chain, sync, flags, params);
   }
   RecordPresent(flags);
-  return g_original_present1(swap_chain, sync, flags, params);
+  const int64_t start = NowNs();
+  HRESULT result = g_original_present1(swap_chain, sync, flags, params);
+  RecordPresentBlock(start, NowNs());
+  return result;
 }
 
 void PatchSlot(void** slot, void* hook, void** original) {
@@ -238,12 +333,12 @@ void PatchSlot(void** slot, void* hook, void** original) {
 }  // namespace
 
 void Initialize(int32_t target_fps, const std::filesystem::path& frame_log) {
-  // The game advances its simulation a fixed 1/60 s per frame, so it is paced
-  // at 60 whatever the setting; higher rates need the timer handled as well.
-  g_target_fps = 60;
-  if (target_fps != 60) {
-    REXLOG_INFO("FramePacer: framerate {} requested; pacing at 60 (the game runs too fast above 60)",
-                target_fps);
+  g_target_fps = target_fps;
+  if (target_fps == 60) {
+    REXLOG_INFO("FramePacer: target 60 FPS");
+  } else {
+    REXLOG_INFO("FramePacer: target {} FPS (experimental above 60: timer step follows frame time)",
+                target_fps > 0 ? std::to_string(target_fps) : std::string("unlimited"));
   }
   // The SDK's vblank and wait loops use ::Sleep(1); without this they run on
   // the default ~15.6 ms scheduler tick and deliver vblanks in bursts.
@@ -313,18 +408,81 @@ void InstallPresentHook() {
   UnregisterClassW(wc.lpszClassName, wc.hInstance);
 }
 
+void SetMatchOnly(bool enabled, bool variable_step) {
+  g_match_only = enabled;
+  g_variable_step = variable_step;
+  g_high_rate = !enabled;
+  timing::SetScaledStep(!enabled && variable_step);
+}
+
+void NoteMatchFrame() {
+  const int64_t now = NowNs();
+  if (g_paused_by_start.load() && now - g_last_match_ns.load() > 100'000'000) {
+    g_paused_by_start = false;  // match update resumed after the pause
+  }
+  g_last_match_ns = now;
+}
+
+void OnControllerButtons(uint32_t user, uint16_t buttons, uint8_t* base) {
+  if (user >= 4) {
+    return;
+  }
+  constexpr uint16_t kStart = 0x0010;
+  const bool start_edge = (buttons & kStart) && !(g_prev_buttons[user] & kStart);
+  g_prev_buttons[user] = buttons;
+  if (!start_edge || !g_match_only.load() || g_target_fps <= 60 || !g_high_rate.load()) {
+    return;
+  }
+  g_paused_by_start = true;
+  g_high_rate = false;
+  timing::RestoreNow(base);
+  REXLOG_INFO("FramePacer: Start pressed in a match: 60 FPS, original timer step");
+}
+
+void OnPopupOpening(uint8_t* base) {
+  if (!g_match_only.load() || g_target_fps <= 60 || !g_high_rate.load()) {
+    return;
+  }
+  g_paused_by_start = true;
+  g_high_rate = false;
+  timing::RestoreNow(base);
+  REXLOG_INFO("FramePacer: popup opening in a match: 60 FPS, original timer step");
+}
+
 void SetUiActive(bool active) {
   g_ui_active += active ? 1 : -1;
 }
 
 void BeforeSwap() {
   auto& s = State();
-  const int32_t target_fps = g_target_fps;
-  if (target_fps > 0) {
-    SleepUntil(s.timer, s.schedule.Next(NowNs(), target_fps));
+  int32_t target_fps = g_target_fps;
+  if (g_match_only.load() && target_fps > 60) {
+    const bool high = !g_paused_by_start.load() && NowNs() - g_last_match_ns.load() < kMatchHoldNs;
+    if (high != g_high_rate.load()) {
+      g_high_rate = high;
+      timing::SetScaledStep(high && g_variable_step.load());
+      REXLOG_INFO("FramePacer: {}", high ? "match running: high frame rate"
+                                         : "not in a running match: 60 FPS, original timer step");
+    }
+    if (!high) {
+      target_fps = 60;
+    }
+  }
+  // Above 60 with a driver frame cap or forced V-Sync, let that limiter set
+  // the rate (Next(.., 0) also resets the schedule for when pacing resumes).
+  const bool follow_external = target_fps > 60 && g_external_limit.load();
+  const int32_t paced_fps = follow_external ? 0 : target_fps;
+  if (paced_fps > 0) {
+    SleepUntil(s.timer, s.schedule.Next(NowNs(), paced_fps));
+  } else {
+    s.schedule.Next(NowNs(), 0);
   }
   // Recorded on release: this is when the frame is submitted.
   const int64_t submitted = NowNs();
+  if (s.last_submit_ns) {
+    timing::SetFrameSeconds(double(submitted - s.last_submit_ns) / 1e9);
+  }
+  s.last_submit_ns = submitted;
   g_game_history.Record(submitted);
   LogEvent(0, submitted);
   LogSummary("game", g_game_history, submitted, s.last_log_ns);

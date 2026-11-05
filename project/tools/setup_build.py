@@ -181,7 +181,7 @@ def main():
     # Preserve existing graphics settings; write the current user's ISO only on this PC.
     settings = dist / 'settings.ini'
     if not settings.exists():
-        settings.write_text(f'iso_path={iso}\nresolution=1080p\nframerate=60\nfullscreen=false\nshow_fps=false\naa=none\npost=fsr\n', encoding='utf-8')
+        settings.write_text(f'iso_path={iso}\nresolution=1080p\nframerate=60\nallow_tearing=true\nfullscreen=false\nshow_fps=false\naa=none\npost=fsr\n', encoding='utf-8')
     else:
         lines = [line for line in settings.read_text(encoding='utf-8-sig').splitlines()
                  if not line.lower().startswith('iso_path=')]
