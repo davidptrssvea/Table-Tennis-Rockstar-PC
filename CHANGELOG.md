@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - existing Build Tools component repair
+## v1.5.3 - 2026-11-05 - Existing Build Tools component repair
 
 - Detect an existing Visual Studio Build Tools 2022 instance without requiring
   the C++ components that may be missing. Add required components with `modify`

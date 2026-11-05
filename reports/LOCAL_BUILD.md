@@ -1,6 +1,6 @@
 # Local build and source distribution
 
-## Existing Build Tools component repair - 2026-11-05 (unpublished)
+## v1.5.3 existing Build Tools component repair - 2026-11-05
 
 The reporter's dd_installer log establishes the cause of component exit code 1:
 Visual Studio Build Tools 2022 is already installed. The game installer invoked
@@ -26,9 +26,11 @@ Signature validation and update download regressions also pass. No Microsoft
 component installation, modification or elevation was executed during testing.
 The reporter's complete component installation remains unverified.
 
-This branch is not published; v1.5.2 assets, real dist and existing ZIPs are
-unchanged. Affected users can update their existing Build Tools 2022 and add the
-required C++/SDK/Clang/CMake components manually, then retry the game installer.
+Release v1.5.3 packages this fix with the same game-free matched engine as
+v1.5.2. Affected users should download the new installer; already-installed
+older updater executables retain their previous component-installation behavior
+until updated. Old toolchains may still require a manual Build Tools update.
+The real dist and existing private ZIPs remain unchanged.
 
 ## v1.5.2 ultrawide legacy-menu and picture-aspect validation - 2026-11-05
 
