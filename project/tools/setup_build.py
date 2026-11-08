@@ -96,6 +96,30 @@ def find_windows_clang(candidates):
                      'MinGW/GNU-targeting Clang is incompatible with the matched engine. See README.md.')
 
 
+MIN_MSVC_TOOLSET = (14, 44)
+
+
+def select_msvc_toolset(vs):
+    """Return the newest installed MSVC toolset the matched engine can link against.
+
+    Plain vcvars64.bat obeys Microsoft.VCToolsVersion.v143.default.txt, which an older
+    side-by-side toolset (for example 14.38) can pin. The engine's prebuilt libraries
+    need the 14.44+ STL, so the toolset is chosen explicitly instead.
+    """
+    versions = []
+    for path in (Path(vs) / 'VC/Tools/MSVC').glob('*'):
+        try:
+            version = tuple(int(part) for part in path.name.split('.'))
+        except ValueError:
+            continue
+        if path.is_dir() and version[:2] >= MIN_MSVC_TOOLSET:
+            versions.append((version, path.name))
+    if not versions:
+        raise ValueError('MSVC toolset 14.44 or newer not found. Update Build Tools 2022 to 17.14 '
+                         'in Visual Studio Installer. See README.md.')
+    return max(versions)[1]
+
+
 def build_tools():
     candidates = []
     vswhere = Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')) / 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -122,10 +146,16 @@ def build_tools():
     if not all(Path(p).is_file() for p in (cmake, ninja, csc)):
         raise ValueError('CMake, Ninja or .NET Framework C# compiler missing. See README.md.')
     vcvars = vs / 'VC/Auxiliary/Build/vcvars64.bat'
+    toolset = select_msvc_toolset(vs)
     # cmd.exe needs its own outer quote pair around a quoted batch pathname.
-    result = subprocess.run(f'cmd.exe /d /s /c ""{vcvars}" >nul && set"', capture_output=True, text=True, check=True)
+    result = subprocess.run(f'cmd.exe /d /s /c ""{vcvars}" -vcvars_ver={toolset} >nul && set"',
+                            capture_output=True, text=True, check=True)
     env = dict(os.environ)
     env.update(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line and not line.startswith('='))
+    if env.get('VCToolsVersion', '').rstrip('\\') != toolset:
+        raise ValueError(f'Visual Studio did not activate MSVC toolset {toolset}. '
+                         'Repair Build Tools 2022 in Visual Studio Installer. See README.md.')
+    print(f'Using MSVC toolset {toolset}.', flush=True)
     return cmake, ninja, Path(clang), csc, env
 
 

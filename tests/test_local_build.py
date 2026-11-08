@@ -65,6 +65,26 @@ class WindowsCompilerTests(unittest.TestCase):
                     OSError('cannot run compiler'), 'clang version 19.1.1\nTarget: x86_64-pc-windows-msvc\n']):
                 self.assertEqual(setup_build.find_windows_clang([broken, good]), good)
 
+    @staticmethod
+    def fake_vs(directory, *versions):
+        vs = Path(directory)
+        for version in versions:
+            (vs / 'VC/Tools/MSVC' / version).mkdir(parents=True)
+        return vs
+
+    def test_newest_msvc_toolset_chosen_over_pinned_older_default(self):
+        # A side-by-side 14.38 install pins Microsoft.VCToolsVersion.v143.default.txt,
+        # which plain vcvars64.bat obeys; the matched engine needs the 14.44+ STL.
+        with tempfile.TemporaryDirectory() as directory:
+            vs = self.fake_vs(directory, '14.38.33130', '14.44.35207', '14.9.1')
+            self.assertEqual(setup_build.select_msvc_toolset(vs), '14.44.35207')
+
+    def test_only_old_msvc_toolsets_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vs = self.fake_vs(directory, '14.38.33130', '14.40.33807')
+            with self.assertRaisesRegex(ValueError, '14.44'):
+                setup_build.select_msvc_toolset(vs)
+
 
 class LocalBuildTests(unittest.TestCase):
     def setUp(self):
