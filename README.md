@@ -207,8 +207,13 @@ and changes the launcher immediately; the game uses it on its next start. These
 are the original localization options on the supported USA/Europe disc; the ISO
 is not modified. The added PC Settings, Photo Mode help, achievements interface,
 loading text, in-game update notifications and authored menu entries follow the
-same choice. Technical diagnostics and the standalone installer/updater may
-still use English. This setting does not promise translated voice audio.
+same choice. The installer offers the same five languages, reads the selected
+folder's saved language, and saves your choice for the launcher/game when setup
+succeeds. The updater reads the installation's saved language automatically.
+Their controls, confirmations and progress messages are translated; technical
+logs and publisher release notes retain their original text. Windows permission
+dialogs and third-party installers use their own language settings. This setting
+does not promise translated voice audio.
 
 Translations are authored in `project/localization.json`. After editing them,
 run `python project/tools/generate_localization.py` and its `--check` option.
