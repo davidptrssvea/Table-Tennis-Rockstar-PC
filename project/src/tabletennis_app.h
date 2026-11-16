@@ -5,6 +5,7 @@
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include "offline_menu_device.h"
+#include "game_language.h"
 #include "intro_skip.h"
 #include "pc_features.h"
 #include "pc_settings.h"
@@ -229,7 +230,7 @@ class TabletennisApp : public rex::ReXApp {
           auto value = line.substr(separator + 1);
           while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) value.pop_back();
           std::string flag;
-          if (key == "button_prompts" || key == "achievement_sound" || key == "show_fps" || key == "display_aspect") flag = key;
+          if (key == "button_prompts" || key == "achievement_sound" || key == "show_fps" || key == "display_aspect" || key == "game_language") flag = key;
 #if defined(TT_COMMUNITY_NETWORK)
           else if (key == "system_link" && (value == "true" || value == "false")) flag = key;
           else if (key == "online_server" || key == "room_code") flag = key;
@@ -284,6 +285,11 @@ class TabletennisApp : public rex::ReXApp {
     if (config.gpu_plugin.empty()) {
       config.gpu_plugin = "xenos";
     }
+
+    const auto language=rex::cvar::GetFlagByName("game_language");
+    const auto language_id=tabletennis::language::XboxId(language);
+    rex::cvar::SetFlagByName("user_language",std::to_string(language_id));
+    REXLOG_INFO("Game language: {} (Xbox system language {})",language,language_id);
 
     const auto picture_aspect=rex::cvar::GetFlagByName("display_aspect");
     if(!rex::cvar::SetFlagByName("present_aspect_ratio","16:9")) {

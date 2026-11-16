@@ -149,6 +149,50 @@ class Probe {
             subprocess.run(common + ['/target:exe', '/out:' + str(executable), str(probe)], check=True)
             subprocess.run([str(executable), str(launcher)], check=True, timeout=10)
 
+    def test_retail_language_settings_round_trip(self):
+        csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+        with tempfile.TemporaryDirectory(prefix='Table Tennis language settings ') as directory:
+            folder = Path(directory)
+            launcher = folder / 'launcher.exe'
+            probe = folder / 'probe.cs'
+            probe.write_text('''using System;using System.IO;using System.Reflection;
+using System.Windows.Controls;
+class Probe {
+ [STAThread] static void Main(string[] args) {
+  string ini=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings.ini");
+  Type t=Assembly.LoadFrom(args[0]).GetType("TableTennisLauncher.MainWindow");
+  var flags=BindingFlags.NonPublic|BindingFlags.Instance;
+  var codes=new[]{"en","fr","de","es","it"};
+  for(int i=0;i<codes.Length;i++) {
+   File.WriteAllText(ini,"future_setting=keep\\n");
+   object window=Activator.CreateInstance(t);
+   var combo=(ComboBox)t.GetField("comboLanguage",flags).GetValue(window);
+   if(combo.Items.Count!=5 || combo.SelectedIndex!=0) throw new Exception("Expected five retail languages, default English");
+   combo.SelectedIndex=i;
+   t.GetMethod("SaveSettings",flags).Invoke(window,null);
+   string saved=File.ReadAllText(ini);
+   if(!saved.Contains("game_language="+codes[i]) || !saved.Contains("future_setting=keep")) throw new Exception("Language setting not saved");
+   ((System.Windows.Window)window).Close();
+   window=Activator.CreateInstance(t);
+   combo=(ComboBox)t.GetField("comboLanguage",flags).GetValue(window);
+   if(combo.SelectedIndex!=i || (string)t.GetMethod("SelectedLanguage",flags).Invoke(window,null)!=codes[i]) throw new Exception("Reload or launch language differs");
+   ((System.Windows.Window)window).Close();
+  }
+  File.WriteAllText(ini,"game_language=sv\\n");
+  object invalid=Activator.CreateInstance(t);
+  if((string)t.GetMethod("SelectedLanguage",flags).Invoke(invalid,null)!="en") throw new Exception("Invalid language must fall back to English");
+  ((System.Windows.Window)invalid).Close();
+ }
+}''', encoding='utf-8')
+            common = [str(csc), '/nologo', '/optimize', '/lib:' + str(csc.parent / 'WPF'),
+                      '/r:PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.dll,System.Xaml.dll']
+            subprocess.run(common + ['/target:winexe', '/out:' + str(launcher),
+                str(ROOT / 'project/launcher/Launcher.cs'), str(ROOT / 'project/launcher/HostSession.cs'),
+                str(ROOT / 'project/launcher/GatewayLeaseRouter.cs')], check=True)
+            executable = folder / 'probe.exe'
+            subprocess.run(common + ['/target:exe', '/out:' + str(executable), str(probe)], check=True)
+            subprocess.run([str(executable), str(launcher)], check=True, timeout=25)
+
     def test_room_and_port_boundaries_match_protocol(self):
         csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
         with tempfile.TemporaryDirectory(prefix='Table Tennis launcher check ') as folder:

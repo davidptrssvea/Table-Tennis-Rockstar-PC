@@ -281,12 +281,12 @@
   {
     "name": "tabletennis_pch.h",
     "input_sha256": "56eb9b49a565ca5acc8a6e6da556c0f1d55accc26f36dcf8698c1cc65e359af1",
-    "output_sha256": "39586d29c4d170dbbb6a8998d6a9297c2b7a7fd50950478b3ebf6c7994cae9bc",
+    "output_sha256": "041a32ee1e5c722d7671e56fdbc1dda1db1b96e7871ea01602bf6f02744d4798",
     "edits": [
       {
         "offset": 13801,
         "delete": 0,
-        "insert": "extern \"C\" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__VdSwap Tabletennis_VdSwap_Hook\n\nextern \"C\" void Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetSigninState Tabletennis_XamUserGetSigninState_Hook\n\nextern \"C\" void Tabletennis_XamUserCheckPrivilege_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserCheckPrivilege Tabletennis_XamUserCheckPrivilege_Hook\n\nextern \"C\" void Tabletennis_XamShowSigninUI_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamShowSigninUI Tabletennis_XamShowSigninUI_Hook\n\nextern \"C\" void Tabletennis_XamUserGetXUID_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetXUID Tabletennis_XamUserGetXUID_Hook\n\n"
+        "insert": "extern \"C\" void Tabletennis_VdSwap_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__VdSwap Tabletennis_VdSwap_Hook\n\nextern \"C\" void Tabletennis_XamUserGetSigninState_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetSigninState Tabletennis_XamUserGetSigninState_Hook\n\nextern \"C\" void Tabletennis_XamUserCheckPrivilege_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserCheckPrivilege Tabletennis_XamUserCheckPrivilege_Hook\n\nextern \"C\" void Tabletennis_XamShowSigninUI_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamShowSigninUI Tabletennis_XamShowSigninUI_Hook\n\nextern \"C\" void Tabletennis_XamUserGetXUID_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XamUserGetXUID Tabletennis_XamUserGetXUID_Hook\n\nextern \"C\" void Tabletennis_XGetLanguage_Hook(PPCContext& ctx, uint8_t* base);\n#define __imp__XGetLanguage Tabletennis_XGetLanguage_Hook\n\n"
       },
       {
         "offset": 14173,

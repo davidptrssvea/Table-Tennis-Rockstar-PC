@@ -3,9 +3,15 @@
 #include <set>
 #include "settings_store.h"
 #include "screen_layout.h"
+#include "game_language.h"
 #include <cassert>
 #include <cmath>
 int main() {
+  using tabletennis::language::XboxId;
+  static_assert(XboxId("en")==1 && XboxId("fr")==4 && XboxId("de")==3);
+  static_assert(XboxId("es")==5 && XboxId("it")==6);
+  static_assert(XboxId("sv")==1 && XboxId("")==1 && XboxId("999")==1);
+
   using namespace tabletennis::pc::layout;
   auto near=[](double a,double b){return std::abs(a-b)<1e-9;};
   for(auto dims : {std::pair{1280,720},std::pair{2560,1080},std::pair{3440,1440},std::pair{3840,1600},std::pair{5120,1440},std::pair{7680,2160}}) {

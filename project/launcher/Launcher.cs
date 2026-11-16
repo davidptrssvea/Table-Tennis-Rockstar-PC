@@ -49,7 +49,7 @@ namespace TableTennisLauncher
         private TextBlock txtIsoStatus;
         private RadioButton rb720, rb1080, rb1440, rb4k, rbUltra;
         private CheckBox chkFullscreen, chkShowFps;
-        private ComboBox comboFps, comboUltra, comboAspect;
+        private ComboBox comboFps, comboUltra, comboAspect, comboLanguage;
         private ComboBox comboAA, comboPost;
         private TextBlock txtStatus;
 
@@ -153,6 +153,15 @@ namespace TableTennisLauncher
                 Margin = new Thickness(2, 0, 0, 8)
             };
             contentPanel.Children.Add(txtIsoStatus);
+
+            contentPanel.Children.Add(CreateSectionTitle("GAME LANGUAGE"));
+            comboLanguage = new ComboBox { Height=28, Margin=new Thickness(0,4,0,6) };
+            foreach (string label in new[]{"English", "Français (French)", "Deutsch (German)", "Español (Spanish)", "Italiano (Italian)"})
+                comboLanguage.Items.Add(label);
+            comboLanguage.SelectedIndex=0;
+            contentPanel.Children.Add(comboLanguage);
+            contentPanel.Children.Add(new TextBlock { Text="Original game text from your disc. Applies when the game starts. Launcher and added PC features remain in English.",
+                FontSize=11, Foreground=new SolidColorBrush(Color.FromRgb(160,175,190)), TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,10) });
 
             // Section: Display Resolution
             var secRes = CreateSectionTitle("DISPLAY RESOLUTION & 3D SCALE");
@@ -954,6 +963,12 @@ namespace TableTennisLauncher
             parent.Children.Add(box); return box;
         }
 
+        private static readonly string[] LanguageCodes = { "en", "fr", "de", "es", "it" };
+        private string SelectedLanguage() {
+            int index=comboLanguage.SelectedIndex;
+            return index>=0 && index<LanguageCodes.Length ? LanguageCodes[index] : "en";
+        }
+
         private string SelectedAspect() { return comboAspect.SelectedIndex==1?"16:9":comboAspect.SelectedIndex==2?"21:9":comboAspect.SelectedIndex==3?"32:9":"auto"; }
 
         private void LoadSettings()
@@ -963,6 +978,7 @@ namespace TableTennisLauncher
             string iso = "";
             string res = "1080p";
             string aspect = "auto";
+            string language = "en";
             int framerate = 60;
             bool fullscreen = true;
             bool showFps = false;
@@ -982,6 +998,7 @@ namespace TableTennisLauncher
                         if (key == "check_updates") bool.TryParse(val,out checkUpdates);
                         else if (key == "button_prompts") buttons = val;
                         else if (key == "display_aspect") aspect = val;
+                        else if (key == "game_language") language = val;
                         else if (key == "online_server") server = val;
                         else if (key == "player_name") player = val;
                         else if (key == "room_code") room = val;
@@ -1039,6 +1056,7 @@ namespace TableTennisLauncher
             else if (framerate == 0) comboFps.SelectedIndex = 4;
             else comboFps.SelectedIndex = 3; // 240 FPS
 
+            comboLanguage.SelectedIndex=Math.Max(0,Array.IndexOf(LanguageCodes,language));
             comboButtons.SelectedIndex = buttons == "xbox" ? 1 : buttons == "playstation" ? 2 : 0;
             txtServer.Text = server; txtPlayer.Text = player; txtRoom.Text = room;
             chkNetwork.IsChecked = HasCommunityEngine && network;
@@ -1091,6 +1109,7 @@ namespace TableTennisLauncher
                     "iso_path=" + iso,
                     "resolution=" + res,
                     "display_aspect=" + SelectedAspect(),
+                    "game_language=" + SelectedLanguage(),
                     "framerate=" + targetFps,
                     "fullscreen=" + fullscreen.ToString().ToLower(),
                     "show_fps=" + showFps.ToString().ToLower(),
@@ -1217,6 +1236,7 @@ namespace TableTennisLauncher
                 selectedIso, resScale, width, height, isFullscreen.ToString().ToLower(), aa, post, showFps.ToString().ToLower(), targetFps);
 
             args += " --display_aspect="+SelectedAspect();
+            args += " --game_language="+SelectedLanguage();
             args += " --button_prompts=" + (comboButtons.SelectedIndex == 1 ? "xbox" : comboButtons.SelectedIndex == 2 ? "playstation" : "auto");
             if (HasCommunityEngine) {
                 args += " --online=off --system_link=" + (chkNetwork.IsChecked == true).ToString().ToLower();

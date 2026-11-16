@@ -4,11 +4,24 @@
 #include <rex/cvar.h>
 #include "tabletennis_app.h"
 #include "system_link.h"
+#include "game_language.h"
 
 REXCVAR_DEFINE_BOOL(show_fps, false, "UI", "Show in-game FPS counter");
 REXCVAR_DEFINE_INT32(framerate, 60, "Video", "Target framerate limit (60, 120, 144, 240, 0=unlimited)");
 REXCVAR_DEFINE_STRING(display_aspect, "auto", "Video", "Picture aspect: auto follows the display, or lock 16:9, 21:9 or 32:9")
     .allowed({"auto", "16:9", "21:9", "32:9"});
+REXCVAR_DEFINE_STRING(game_language, "en", "UI", "Original game language: en, fr, de, es, it (restart required)")
+    .allowed({"en", "fr", "de", "es", "it"});
+
+// The stock engine's XGetLanguage always returns English. Override both direct
+// calls and registered guest thunks without requiring a different engine DLL.
+extern "C" void Tabletennis_XGetLanguage_Hook(PPCContext& ctx, uint8_t*) {
+  ctx.r3.u64 = tabletennis::language::XboxId(rex::cvar::GetFlagByName("game_language"));
+}
+extern "C" void __imp__Tabletennis_XGetLanguage_Hook(PPCContext& ctx, uint8_t* base) {
+  Tabletennis_XGetLanguage_Hook(ctx, base);
+}
+
 REXCVAR_DEFINE_BOOL(frame_log, false, "Video", "Write every game frame and present time to frametimes.csv next to the executable");
 REXCVAR_DEFINE_BOOL(allow_tearing, true, "Video", "Present without waiting for display refresh. Off can drop the game below 60 FPS: a blocked present stalls GPU emulation");
 

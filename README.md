@@ -199,6 +199,15 @@ F10 opens a separate native statistics window with submission rate, average/p99/
 - **AMD FidelityFX FSR**, **Contrast Adaptive Sharpening (CAS)** or **Bilinear** presentation options.
 - **Fullscreen or windowed mode**, configured before launching the game.
 
+### Game language
+
+Choose **GAME LANGUAGE** in the launcher before starting the game: **English**,
+**Français**, **Deutsch**, **Español**, or **Italiano**. The selection is saved
+and takes effect on the next game start. These are the original localization
+options on the supported USA/Europe disc; the ISO is not modified. The launcher
+and added PC features (PC Settings, Photo Mode help, achievements UI and update
+messages) remain in English. This setting does not promise translated voice audio.
+
 ### A more convenient PC experience
 
 - **Graphical settings launcher:** choose your ISO, resolution, framerate, display mode and image filters in one place; settings are saved for the next launch.
