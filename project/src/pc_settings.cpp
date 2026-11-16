@@ -1,3 +1,4 @@
+#include "localization.h"
 #include "pc_settings.h"
 #include "settings_store.h"
 #include "update_ui.h"
@@ -130,17 +131,17 @@ bool HandleKey(rex::ui::KeyEvent& event) {
 }
 struct SettingsPage::State {
   std::vector<Row> rows{
-    {"resolution","RESOLUTION","Window and 3D rendering size. Applies after restarting the game.",
+    {"resolution",tabletennis::l10n::T("RESOLUTION"),tabletennis::l10n::T("Window and 3D rendering size. Applies after restarting the game."),
      {"720p","1080p","1440p","4k","2560x1080","3440x1440","3840x1600"},
      {"1280 X 720","1920 X 1080","2560 X 1440","3840 X 2160","2560 X 1080 (21:9)","3440 X 1440 (21:9)","3840 X 1600 (21:9)"},1,true},
-    {"fullscreen","FULLSCREEN","Switch between a window and fullscreen immediately.",{"false","true"},{"OFF","ON"}},
-    {"aa","ANTI-ALIASING","Smooth jagged edges. Applies after restarting the game.",{"none","fxaa","fxaa_extreme"},{"OFF","FXAA","FXAA EXTREME"},1,true},
-    {"post","SHARPENING / SCALING","Choose the output filter. Applies after restarting the game.",{"bilinear","cas","fsr"},{"BILINEAR","CAS","FSR"},2,true},
-    {"show_fps","FPS / FRAME TIMES","Open the separate F10 timing window. Gameplay stays paced at 60 FPS.",{"false","true"},{"OFF","ON"}},
-    {"button_prompts","BUTTON ICONS","AUTO follows the controller in use. Changes apply immediately.",{"auto","xbox","playstation"},{"AUTO","XBOX","PLAYSTATION"}},
-    {"achievement_sound","ACHIEVEMENT SOUND","Play a sound when an achievement unlocks.",{"false","true"},{"OFF","ON"},1},
-    {"display_aspect","PICTURE ASPECT","AUTO follows the display. Locks preserve proportions with black bars. Applies after restart.",{ "auto","16:9","21:9","32:9" },{ "AUTO / DISPLAY","16:9","21:9","32:9" },0,true},
-    {"updates","UPDATES","Check signed releases. Installation only starts after you approve it in the updater.",{""},{"CHECK NOW"}}
+    {"fullscreen",tabletennis::l10n::T("FULLSCREEN"),tabletennis::l10n::T("Switch between a window and fullscreen immediately."),{"false","true"},{tabletennis::l10n::T("OFF"),tabletennis::l10n::T("ON")}},
+    {"aa",tabletennis::l10n::T("ANTI-ALIASING"),tabletennis::l10n::T("Smooth jagged edges. Applies after restarting the game."),{"none","fxaa","fxaa_extreme"},{tabletennis::l10n::T("OFF"),"FXAA","FXAA EXTREME"},1,true},
+    {"post",tabletennis::l10n::T("SHARPENING / SCALING"),tabletennis::l10n::T("Choose the output filter. Applies after restarting the game."),{"bilinear","cas","fsr"},{tabletennis::l10n::T("BILINEAR"),"CAS","FSR"},2,true},
+    {"show_fps",tabletennis::l10n::T("FPS / FRAME TIMES"),tabletennis::l10n::T("Open the separate F10 timing window. Gameplay stays paced at 60 FPS."),{"false","true"},{tabletennis::l10n::T("OFF"),tabletennis::l10n::T("ON")}},
+    {"button_prompts",tabletennis::l10n::T("BUTTON ICONS"),tabletennis::l10n::T("AUTO follows the controller in use. Changes apply immediately."),{"auto","xbox","playstation"},{tabletennis::l10n::T("AUTO"),"XBOX","PLAYSTATION"}},
+    {"achievement_sound",tabletennis::l10n::T("ACHIEVEMENT SOUND"),tabletennis::l10n::T("Play a sound when an achievement unlocks."),{"false","true"},{tabletennis::l10n::T("OFF"),tabletennis::l10n::T("ON")},1},
+    {"display_aspect",tabletennis::l10n::T("PICTURE ASPECT"),tabletennis::l10n::T("AUTO follows the display. Locks preserve proportions with black bars. Applies after restart."),{ "auto","16:9","21:9","32:9" },{ tabletennis::l10n::T("AUTO / DISPLAY"),"16:9","21:9","32:9" },0,true},
+    {"updates",tabletennis::l10n::T("UPDATES"),tabletennis::l10n::T("Check signed releases. Installation only starts after you approve it in the updater."),{""},{tabletennis::l10n::T("CHECK NOW")}}
   };
   int row=0,repeat_direction=0;
   double repeat_at=0;
@@ -210,7 +211,7 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
     auto* font=heavy?achievement_ui::HeadlineFont(px):achievement_ui::BodyFont();
     dl->AddText(font,px,{xx,yy},color,value);
   };
-  text(38*s,x+28*s,y+12*s,IM_COL32(255,209,0,255),"PC SETTINGS");
+  text(38*s,x+28*s,y+12*s,IM_COL32(255,209,0,255),tabletennis::l10n::T("PC SETTINGS"));
   for(size_t i=0;i<state_->rows.size();++i) {
     const auto& row=state_->rows[i];const float yy=y+84*s+i*40*s;
     const bool selected=int(i)==state_->row;
@@ -227,7 +228,7 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
     const auto color=selected?IM_COL32(255,209,0,255):IM_COL32(205,207,211,255);
     text(23*s,x+28*s,yy,color,row.label);
     auto label=std::string(row.labels[row.selected])+(row.restart?" *":"");
-    if(std::string(row.key)=="updates") {auto update=updates::GetStatus();if(update.state=="available") label="UPDATE "+update.version;}
+    if(std::string(row.key)=="updates") {auto update=updates::GetStatus();if(update.state=="available") label=tabletennis::l10n::T("UPDATE ")+update.version;}
     auto* font=achievement_ui::HeadlineFont(23*s);
     auto size=font->CalcTextSizeA(23*s,FLT_MAX,0,label.c_str());
     text(23*s,r-28*s-size.x,yy,color,label.c_str());
@@ -235,14 +236,15 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
       state_->row=int(i);Change(1);
     }
   }
-  dl->PushClipRect({x+20*s,y+454*s},{r-20*s,y+524*s},true);
-  text(19*s,x+28*s,y+456*s,IM_COL32(220,220,220,255),state_->rows[state_->row].help,false);
-  text(18*s,x+28*s,y+489*s,IM_COL32(190,190,190,255),"* AFTER RESTART     |     FRAME PACING: 60 FPS",false);
+  dl->PushClipRect({x+20*s,y+448*s},{r-20*s,y+524*s},true);
+  dl->AddText(achievement_ui::BodyFont(),19*s,{x+28*s,y+448*s},IM_COL32(220,220,220,255),
+              state_->rows[state_->row].help,nullptr,864*s);
+  text(18*s,x+28*s,y+504*s,IM_COL32(190,190,190,255),tabletennis::l10n::T("* AFTER RESTART     |     FRAME PACING: 60 FPS"),false);
   dl->PopClipRect();
   dl->AddRectFilled({x,y+535*s},{r,y+583*s},IM_COL32(205,208,210,255));
   const auto ink=IM_COL32(20,22,25,255);
   prompts::DrawButtonLabel(dl,{x+24*s,y+559*s},21*s,ink,
-                           "D-PAD: SELECT / CHANGE",achievement_ui::HeadlineFont(21*s));
+                           tabletennis::l10n::T("D-PAD: SELECT / CHANGE"),achievement_ui::HeadlineFont(21*s));
   auto action=[&](float xx,const char* letter,const char* label,ImU32 color) {
     ImVec2 center{xx,y+559*s};
     prompts::DrawButton(dl,center,13*s,color,letter,
@@ -250,8 +252,8 @@ void SettingsPage::OnDraw(ImGuiIO& io) {
     prompts::DrawButtonLabel(dl,{xx+21*s,center.y},21*s,ink,label,
                              achievement_ui::HeadlineFont(21*s));
   };
-  action(x+415*s,"A","CHANGE",IM_COL32(90,186,40,255));
-  action(x+640*s,"B","SAVE & BACK",IM_COL32(210,44,44,255));
+  action(x+415*s,"A",tabletennis::l10n::T("CHANGE"),IM_COL32(90,186,40,255));
+  action(x+640*s,"B",tabletennis::l10n::T("SAVE & BACK"),IM_COL32(210,44,44,255));
   if(!state_->error.empty()) text(16*s,x+12*s,y+592*s,IM_COL32(255,130,110,255),state_->error.c_str(),false);
 }
 }

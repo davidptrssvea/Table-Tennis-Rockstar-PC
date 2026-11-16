@@ -202,11 +202,18 @@ F10 opens a separate native statistics window with submission rate, average/p99/
 ### Game language
 
 Choose **GAME LANGUAGE** in the launcher before starting the game: **English**,
-**Français**, **Deutsch**, **Español**, or **Italiano**. The selection is saved
-and takes effect on the next game start. These are the original localization
-options on the supported USA/Europe disc; the ISO is not modified. The launcher
-and added PC features (PC Settings, Photo Mode help, achievements UI and update
-messages) remain in English. This setting does not promise translated voice audio.
+**FranÃ§ais**, **Deutsch**, **EspaÃ±ol**, or **Italiano**. The selection is saved
+and changes the launcher immediately; the game uses it on its next start. These
+are the original localization options on the supported USA/Europe disc; the ISO
+is not modified. The added PC Settings, Photo Mode help, achievements interface,
+loading text, in-game update notifications and authored menu entries follow the
+same choice. Technical diagnostics and the standalone installer/updater may
+still use English. This setting does not promise translated voice audio.
+
+Translations are authored in `project/localization.json`. After editing them,
+run `python project/tools/generate_localization.py` and its `--check` option.
+Localized menu archives are generated locally from the verified disc during
+setup and are never included in the public source package.
 
 ### A more convenient PC experience
 

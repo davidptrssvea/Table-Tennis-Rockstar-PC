@@ -1,3 +1,4 @@
+#include "localization.h"
 // achievement_ui.cpp - see achievement_ui.h.
 
 #include "generated/default/tabletennis_init.h"
@@ -28,6 +29,7 @@
 #include <random>
 #include <ctime>
 #include <string_view>
+#include <windows.h>
 
 REXCVAR_DEFINE_BOOL(achievement_sound, true, "UI", "Play a chime when an achievement unlocks");
 
@@ -206,7 +208,7 @@ ImFont* LoadFirst(ImFontAtlas* atlas, const std::vector<std::filesystem::path>& 
   config.OversampleH = 2;
   config.OversampleV = 1;
   config.PixelSnapH = false;
-  static const ImWchar ranges[] = {0x20, 0xFF, 0x2013, 0x2026, 0};
+  static const ImWchar ranges[] = {0x20, 0x17F, 0x2013, 0x2026, 0};
   for (const auto& path : candidates) {
     std::error_code ec;
     if (!std::filesystem::exists(path, ec)) continue;
@@ -257,9 +259,18 @@ void AddOutlinedText(ImDrawList* dl, ImFont* font, float px, ImVec2 pos, ImU32 c
 
 std::string Upper(std::string_view text) {
   std::string out(text);
-  for (auto& c : out) {
-    if (c >= 'a' && c <= 'z') c = char(c - 'a' + 'A');
-  }
+  // Preserve accented letters when rendering localized achievement names.
+  const int count=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),int(text.size()),nullptr,0);
+  if(count<=0) return out;
+  std::wstring wide(count,L'\0');
+  MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),int(text.size()),wide.data(),count);
+  const int upper_count=LCMapStringEx(LOCALE_NAME_INVARIANT,LCMAP_UPPERCASE,wide.data(),count,nullptr,0,nullptr,nullptr,0);
+  if(upper_count<=0) return out;
+  std::wstring upper(upper_count,L'\0');
+  if(!LCMapStringEx(LOCALE_NAME_INVARIANT,LCMAP_UPPERCASE,wide.data(),count,upper.data(),upper_count,nullptr,nullptr,0)) return out;
+  const int bytes=WideCharToMultiByte(CP_UTF8,0,upper.data(),upper_count,nullptr,0,nullptr,nullptr);
+  if(bytes<=0) return out;
+  out.resize(bytes);WideCharToMultiByte(CP_UTF8,0,upper.data(),upper_count,out.data(),bytes,nullptr,nullptr);
   return out;
 }
 
@@ -267,8 +278,9 @@ std::string Upper(std::string_view text) {
 std::string Fit(ImFont* font, float px, float x_scale, float max_width, std::string text) {
   if (TextWidth(font, px, text.c_str(), x_scale) <= max_width) return text;
   while (!text.empty()) {
-    text.pop_back();
-    while (!text.empty() && (uint8_t(text.back()) & 0xC0) == 0x80) text.pop_back();
+    size_t end=text.size()-1;
+    while(end>0 && (uint8_t(text[end])&0xC0)==0x80) --end;
+    text.resize(end);
     std::string candidate = text + "...";
     if (TextWidth(font, px, candidate.c_str(), x_scale) <= max_width) return candidate;
   }
@@ -689,7 +701,7 @@ void AchievementToast::DrawToast(ImGuiIO& io, const rex::system::AchievementInfo
   const float margin = kToast.margin * s;
 
   const std::string name = Upper(info.label);
-  const char* caption = "ACHIEVEMENT UNLOCKED";
+  const char* caption = tabletennis::l10n::T("ACHIEVEMENT UNLOCKED");
   ImFont* name_font = Heavy(name_px);
   ImFont* caption_font = Heavy(caption_px);
   const float badge_w = GamerscoreBadge(nullptr, 0, 0, score_px, int(info.gamerscore), 1.0f, false);
@@ -965,13 +977,13 @@ void AchievementsPanel::OnDraw(ImGuiIO& io) {
 
     const float title_px = 40.0f * s;
     AddOutlinedText(dl, Heavy(title_px), title_px, ImVec2(px0 + 8.0f * s, CapsTop(header_cy, title_px)),
-                    Yellow(in), Outline(in), 2.6f * s, "ACHIEVEMENTS", kCondensed);
+                    Yellow(in), Outline(in), 2.6f * s, tabletennis::l10n::T("ACHIEVEMENTS"), kCondensed);
 
     // Progress block on the right of the band.
     char line[64];
     const float stat_px = 17.0f * s;
     ImFont* stat_font = Heavy(stat_px);
-    std::snprintf(line, sizeof(line), "%d / %d UNLOCKED", unlocked_count_, int(entries_.size()));
+    std::snprintf(line, sizeof(line), tabletennis::l10n::T("%d / %d UNLOCKED"), unlocked_count_, int(entries_.size()));
     float wline = TextWidth(stat_font, stat_px, line, kCondensed);
     const float stats_right = px1 - 10.0f * s;
     AddOutlinedText(dl, stat_font, stat_px, ImVec2(stats_right - wline, CapsTop(header_cy - 11.0f * s, stat_px)),
@@ -1081,7 +1093,7 @@ void AchievementsPanel::OnDraw(ImGuiIO& io) {
     // Gamerscore and state on the right.
     const float right_x = rx1 - 12.0f * s;
     GamerscoreBadge(dl, right_x, ry0 + 20.0f * s, 20.0f * s, int(e.info.gamerscore), e.unlocked ? in : 0.55f * in);
-    const std::string state = e.unlocked ? "UNLOCKED " + e.unlock_date : std::string("LOCKED");
+    const std::string state = e.unlocked ? tabletennis::l10n::T("UNLOCKED ") + e.unlock_date : std::string(tabletennis::l10n::T("LOCKED"));
     ImFont* sf = Heavy(small_px);
     const float sw = TextWidth(sf, small_px, state.c_str(), kCondensed);
     AddText(dl, sf, small_px, ImVec2(right_x - sw, CapsTop(ry0 + 44.0f * s, small_px)),
@@ -1110,9 +1122,9 @@ void AchievementsPanel::OnDraw(ImGuiIO& io) {
     Triangle(dl, ImVec2(x + 5.0f * s, fcy - 5.0f * s), 7.0f * s, true, Yellow(in));
     Triangle(dl, ImVec2(x + 5.0f * s, fcy + 5.0f * s), 7.0f * s, false, Yellow(in));
     x += 20.0f * s;
-    AddText(dl, lf, label_px, ImVec2(x, CapsTop(fcy, label_px)), FooterText(in), "SCROLL", kCondensed);
+    AddText(dl, lf, label_px, ImVec2(x, CapsTop(fcy, label_px)), FooterText(in), tabletennis::l10n::T("SCROLL"), kCondensed);
     // Right: close with B.
-    const char* close_label = "CLOSE";
+    const char* close_label = tabletennis::l10n::T("CLOSE");
     const float close_w = TextWidth(lf, label_px, close_label, kCondensed);
     const float glyph_r = 10.0f * s;
     float right = px1 - 20.0f * s;
@@ -1120,7 +1132,7 @@ void AchievementsPanel::OnDraw(ImGuiIO& io) {
     right -= glyph_r * 2.0f + 8.0f * s;
     AddText(dl, lf, label_px, ImVec2(right - close_w, CapsTop(fcy, label_px)), FooterText(in), close_label, kCondensed);
     // Middle: how the list opens, for players who found it by accident.
-    const char* hint = "HOLD VIEW OR PRESS F7 TO OPEN";
+    const char* hint = tabletennis::l10n::T("HOLD VIEW OR PRESS F7 TO OPEN");
     const float hint_px = 11.0f * s;
     const float hint_w = TextWidth(lf, hint_px, hint, kCondensed);
     AddText(dl, lf, hint_px, ImVec2((px0 + px1 - hint_w) * 0.5f, CapsTop(fcy, hint_px)), FooterText(0.55f * in), hint, kCondensed);

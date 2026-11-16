@@ -127,7 +127,7 @@ def _movies(archive):
     return result
 
 
-def patch(path, online=False):
+def _patch_english(path, online=False):
     from menu_settings import _add_pc_settings, _add_pause_pc_settings
     path = Path(path)
     archive = bytearray(path.read_bytes())
@@ -165,3 +165,60 @@ def patch(path, online=False):
     finally:
         temporary.unlink(missing_ok=True)
     print('Created verified PC SETTINGS entries in frontend and pause OPTIONS.',flush=True)
+
+
+def localized_movies(archive, code, online=False):
+    """Translate only our two authored labels; retain all retail text/offsets.
+
+    Labels use fixed byte slots, padded with spaces. Their Flash fields are
+    left-aligned. No bytecode address, Push length or function boundary changes.
+    """
+    import json
+    rows = json.loads(Path(__file__).resolve().parents[1].joinpath('localization.json').read_text(encoding='utf-8'))
+    index = {'fr': 1, 'de': 2, 'es': 3, 'it': 4}[code]
+    labels = {row[0]: row[index] for row in rows if row[0] in ('PC SETTINGS', 'QUIT TO DESKTOP')}
+    result = bytearray(archive)
+    movies = _movies(result)
+    for name, (movie, entry, offset, limit) in movies.items():
+        expected = (SETTINGS_ONLINE_MOVIE if online else SETTINGS_OFFLINE_MOVIE) if name == b'pongui_001.xeck' else SETTINGS_PAUSE_MOVIE
+        if hashlib.sha256(movie).hexdigest() != expected:
+            raise ValueError('Unsupported English menu for localization')
+        for english, translated in labels.items():
+            old = english.encode('utf-8') + b'\0'
+            count = movie.count(old)
+            wanted = 1 if english == 'PC SETTINGS' or name == b'pongui_001.xeck' else 0
+            if count != wanted:
+                raise ValueError('Unexpected authored menu label count: ' + english)
+            text = translated.encode('utf-8')
+            if len(text) > len(old)-1:
+                raise ValueError('Localized menu label exceeds its byte slot')
+            movie = movie.replace(old, text.ljust(len(old)-1,b' ') + b'\0')
+        compressor = zlib.compressobj(9,zlib.DEFLATED,-15)
+        packed = compressor.compress(movie) + compressor.flush()
+        if offset + len(packed) > limit:
+            raise ValueError('Localized movie exceeds archive slot')
+        result[offset:limit] = packed + bytes(limit-offset-len(packed))
+        struct.pack_into('<I',result,entry+8,len(packed))
+    # Independently decompress each written movie before accepting the archive.
+    decoded = _movies(result)
+    for name, (movie, *_rest) in decoded.items():
+        for english, translated in labels.items():
+            if english == 'QUIT TO DESKTOP' and name != b'pongui_001.xeck': continue
+            if movie.count(translated.encode().ljust(len(english.encode()),b' ') + b'\0') != 1:
+                raise ValueError('Localized archive verification failed')
+    return bytes(result)
+
+
+def patch(path, online=False):
+    _patch_english(path, online)
+    path = Path(path)
+    original = path.read_bytes()
+    for code in ('fr','de','es','it'):
+        data = localized_movies(original, code, online)
+        target = path.parent / code / path.name
+        target.parent.mkdir(exist_ok=True)
+        if target.exists() and target.read_bytes() == data: continue
+        temporary = target.with_suffix('.localization.tmp')
+        temporary.write_bytes(data)
+        temporary.replace(target)
+    print('Verified four locally generated menu language packs; ISO unchanged.',flush=True)

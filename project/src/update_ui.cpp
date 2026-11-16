@@ -1,3 +1,4 @@
+#include "localization.h"
 #include "update_ui.h"
 #include "pc_settings.h"
 #include "achievement_ui.h"
@@ -91,8 +92,8 @@ void UpdateToast::OnDraw(ImGuiIO& io) {
   const float s=io.DisplaySize.y/720.f,x=io.DisplaySize.x-610*s,y=io.DisplaySize.y-132*s;
   auto* draw=ImGui::GetForegroundDrawList();
   draw->AddRectFilled({x,y},{io.DisplaySize.x-22*s,y+104*s},IM_COL32(20,36,50,245),8*s);
-  std::string title="UPDATE "+version_+" AVAILABLE";
+  std::string title=tabletennis::l10n::T("UPDATE ")+version_+tabletennis::l10n::T(" AVAILABLE");
   draw->AddText(achievement_ui::HeadlineFont(26*s),26*s,{x+20*s,y+16*s},IM_COL32(255,209,0,255),title.c_str());
-  draw->AddText(achievement_ui::BodyFont(),18*s,{x+20*s,y+59*s},IM_COL32(235,237,240,255),"OPTIONS > PC SETTINGS > UPDATES");
+  draw->AddText(achievement_ui::BodyFont(),18*s,{x+20*s,y+59*s},IM_COL32(235,237,240,255),tabletennis::l10n::T("OPTIONS > PC SETTINGS > UPDATES"));
 }
 }

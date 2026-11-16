@@ -1,3 +1,4 @@
+#include "localization.h"
 // Adapted from ThisIsAkill/Table-Tennis-Linux, ded80880299e26db86289326d31f1a8a2479fc82 (MIT).
 #include "generated/default/tabletennis_init.h"
 #include "photo_mode.h"
@@ -150,17 +151,17 @@ void SavePicture() {
   {std::lock_guard lock(g_mutex);getter=g_presenter;}
   rex::ui::Presenter* presenter = getter ? getter() : nullptr;
   if (!presenter) {
-    Notice("CANNOT SAVE PICTURES HERE");
+    Notice(tabletennis::l10n::T("CANNOT SAVE PICTURES HERE"));
     return;
   }
-  if(g_capture_busy.exchange(true)) {Notice("PICTURE IS STILL SAVING");return;}
+  if(g_capture_busy.exchange(true)) {Notice(tabletennis::l10n::T("PICTURE IS STILL SAVING"));return;}
   if(g_capture.joinable()) g_capture.join();
   const double aspect=tabletennis::pc::CameraAspect(16.0/9.0);
   g_capture=std::thread([presenter,aspect] {
    try {
     rex::ui::RawImage image;
     if (!presenter->CaptureGuestOutput(image) || !tabletennis::photo::image::Valid({image.width,image.height,image.stride,image.data})) {
-      Notice("COULD NOT CAPTURE THE PICTURE");
+      Notice(tabletennis::l10n::T("COULD NOT CAPTURE THE PICTURE"));
       g_capture_busy.store(false);
       return;
     }
@@ -175,12 +176,12 @@ void SavePicture() {
     if (tabletennis::photo::image::WritePng(path,view,aspect)) {
       REXLOG_INFO("Tabletennis: photo saved to {} ({}x{})", path.string(), image.width,
                   tabletennis::photo::image::OutputHeight(view,aspect));
-      Notice("SAVED photos/" + std::string(name) + " (" + std::to_string(image.width) + "x" +
+      Notice(tabletennis::l10n::T("SAVED photos/") + std::string(name) + " (" + std::to_string(image.width) + "x" +
              std::to_string(tabletennis::photo::image::OutputHeight(view,aspect)) + ")");
     } else {
-      Notice("COULD NOT SAVE THE PICTURE");
+      Notice(tabletennis::l10n::T("COULD NOT SAVE THE PICTURE"));
     }
-   } catch(const std::exception& error) {REXLOG_ERROR("Photo save failed: {}",error.what());Notice("COULD NOT SAVE THE PICTURE");}
+   } catch(const std::exception& error) {REXLOG_ERROR("Photo save failed: {}",error.what());Notice(tabletennis::l10n::T("COULD NOT SAVE THE PICTURE"));}
    g_capture_busy.store(false);
   });
 }
@@ -237,8 +238,8 @@ void ObserveHud(const char* name) {
 void RequestToggle() {
   if(!g_running.load()) return;
   if(!g_active.load()) {
-    if(InNetworkSession()) {Notice("PHOTO MODE IS NOT AVAILABLE IN NETWORK MATCHES");return;}
-    if(!MatchInPlay() || pc_settings::IsOpen() || achievement_ui::IsPanelOpen()) {Notice("PHOTO MODE WORKS DURING AN OFFLINE MATCH");return;}
+    if(InNetworkSession()) {Notice(tabletennis::l10n::T("PHOTO MODE IS NOT AVAILABLE IN NETWORK MATCHES"));return;}
+    if(!MatchInPlay() || pc_settings::IsOpen() || achievement_ui::IsPanelOpen()) {Notice(tabletennis::l10n::T("PHOTO MODE WORKS DURING AN OFFLINE MATCH"));return;}
   }
   g_toggle_requested.store(true);
 }
@@ -347,18 +348,19 @@ void Overlay::OnDraw(ImGuiIO& io) {
     dl->AddRectFilled(at(0,0),at(650,264),IM_COL32(13,18,27,242));
     dl->AddRect(at(0,0),at(650,264),IM_COL32(135,155,182,65),0,0,1*s);
     dl->AddRectFilled(at(16,14),at(20,40),gold);
-    dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(30,12),gold,"PHOTO MODE");
-    label(225,20,"FREE CAMERA",11,muted);
+    dl->AddText(achievement_ui::HeadlineFont(25*s),25*s,at(30,12),gold,tabletennis::l10n::T("PHOTO MODE"));
+    const auto heading_size=achievement_ui::HeadlineFont(25*s)->CalcTextSizeA(25*s,1e6f,0,tabletennis::l10n::T("PHOTO MODE"));
+    label(std::max(225.f,30.f+heading_size.x/s+16.f),20,tabletennis::l10n::T("FREE CAMERA"),11,muted);
     dl->AddRectFilled(at(520,12),at(634,42),IM_COL32(255,210,36,19));
     char zoom[32];std::snprintf(zoom,sizeof(zoom),"ZOOM  %.2fx",g_zoom.load());
     label(534,20,zoom,14,gold);
     dl->AddLine(at(16,52),at(634,52),rule,1*s);
-    label(16,63,"CONTROLLER",11,gold);
-    label(316,63,"KEYBOARD & MOUSE",11,gold);
+    label(16,63,tabletennis::l10n::T("CONTROLLER"),11,gold);
+    label(316,63,tabletennis::l10n::T("KEYBOARD & MOUSE"),11,gold);
     dl->AddLine(at(300,64),at(300,185),rule,1*s);
-    const char* actions[]={"Move","Look","Height","Zoom","Speed"};
-    const char* pad[]={"Left stick","Right stick",prompts::PlayStation()?"L2 / R2":"LT / RT","D-pad up / down",prompts::PlayStation()?"L1 slow / R1 fast":"LB slow / RB fast"};
-    const char* keyboard[]={"W A S D / arrows","Mouse drag","Q / E","Wheel / Page Up / Down","Shift fast / Ctrl slow"};
+    const char* actions[]={tabletennis::l10n::T("Move"),tabletennis::l10n::T("Look"),tabletennis::l10n::T("Height"),tabletennis::l10n::T("Zoom"),tabletennis::l10n::T("Speed")};
+    const char* pad[]={tabletennis::l10n::T("Left stick"),tabletennis::l10n::T("Right stick"),prompts::PlayStation()?"L2 / R2":"LT / RT",tabletennis::l10n::T("D-pad up / down"),prompts::PlayStation()?tabletennis::l10n::T("L1 slow / R1 fast"):tabletennis::l10n::T("LB slow / RB fast")};
+    const char* keyboard[]={tabletennis::l10n::T("W A S D / arrows"),tabletennis::l10n::T("Mouse drag"),"Q / E",tabletennis::l10n::T("Wheel / Page Up / Down"),tabletennis::l10n::T("Shift fast / Ctrl slow")};
     for(int row=0;row<5;row++) {
       const float y=85+21*row;
       label(16,y,actions[row],14,muted);label(84,y,pad[row],15,text);
@@ -366,8 +368,8 @@ void Overlay::OnDraw(ImGuiIO& io) {
     }
     dl->AddLine(at(16,194),at(634,194),rule,1*s);
     const char* letters[]={"A","B","X","Y"};
-    const char* labels[]={"HIDE HELP","LEAVE","SAVE PICTURE","RESET VIEW"};
-    const char* keys[]={"SPACE","F9 / ESC","ENTER","R"};
+    const char* labels[]={tabletennis::l10n::T("HIDE HELP"),tabletennis::l10n::T("LEAVE"),tabletennis::l10n::T("SAVE PICTURE"),tabletennis::l10n::T("RESET VIEW")};
+    const char* keys[]={tabletennis::l10n::T("SPACE"),"F9 / ESC",tabletennis::l10n::T("ENTER"),"R"};
     const unsigned colors[]={IM_COL32(79,185,24,255),IM_COL32(215,42,42,255),IM_COL32(42,100,225,255),IM_COL32(235,190,24,255)};
     for(int i=0;i<4;i++) {
       const float x=16+156*i;
@@ -375,7 +377,7 @@ void Overlay::OnDraw(ImGuiIO& io) {
       prompts::DrawButtonLabel(dl,at(x+34,219),13*s,text,labels[i],body);
       label(x+34,231,keys[i],11,muted);
     }
-    label(16,248,"F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE",9,muted);
+    label(16,248,tabletennis::l10n::T("F9 / BOTH STICK CLICKS: LEAVE PHOTO MODE"),9,muted);
   }
   if(!notice.empty()) {
     const float wrap=width-32*s;
@@ -397,24 +399,24 @@ extern "C" void sub_821B5A68(PPCContext& ctx, uint8_t* base) {
   if(!g_running.load()) {__imp__sub_821B5A68(ctx,base);return;}
   g_guest_base=base;
   const uint32_t matrix = ctx.r4.u32;
-  if(g_active.load() && InNetworkSession()) {g_active.store(false);Notice("PHOTO MODE CLOSED FOR NETWORK PLAY");}
+  if(g_active.load() && InNetworkSession()) {g_active.store(false);Notice(tabletennis::l10n::T("PHOTO MODE CLOSED FOR NETWORK PLAY"));}
   if (g_toggle_requested.exchange(false)) {
     if (g_active.load()) {
       g_active.store(false);
-      Notice("PHOTO MODE OFF");
+      Notice(tabletennis::l10n::T("PHOTO MODE OFF"));
       g_keys.store(0);g_mouse_dx.store(0);g_mouse_dy.store(0);g_save_requested.store(false);
       g_move_x.store(0);g_move_z.store(0);g_look_x.store(0);g_look_y.store(0);g_rise.store(0);
       g_pad_zoom.store(0);g_zoom_steps.store(0);
       REXLOG_INFO("Tabletennis: photo mode off");
     } else if (InNetworkSession()) {
-      Notice("PHOTO MODE IS NOT AVAILABLE IN NETWORK MATCHES");
+      Notice(tabletennis::l10n::T("PHOTO MODE IS NOT AVAILABLE IN NETWORK MATCHES"));
     } else if (!MatchInPlay()) {
-      Notice("PHOTO MODE WORKS DURING A MATCH");
+      Notice(tabletennis::l10n::T("PHOTO MODE WORKS DURING A MATCH"));
     } else {
       g_active.store(true);
       g_zoom.store(1);g_zoom_steps.store(0);g_pad_zoom.store(0);
       g_help.store(true);
-      Notice("PHOTO MODE ON");
+      Notice(tabletennis::l10n::T("PHOTO MODE ON"));
       REXLOG_INFO("Tabletennis: photo mode on");
     }
   }
@@ -429,13 +431,13 @@ extern "C" void sub_821B5A68(PPCContext& ctx, uint8_t* base) {
   REX_STORE_U32(kNoHudValue, kNoHudName);
   if (!g_scratch) g_scratch = rex::system::kernel_memory()->SystemHeapAlloc(64, 16);
   if (!g_scratch) {
-    g_active.store(false);Apply(base,false);Notice("PHOTO MODE COULD NOT INITIALIZE");
+    g_active.store(false);Apply(base,false);Notice(tabletennis::l10n::T("PHOTO MODE COULD NOT INITIALIZE"));
     __imp__sub_821B5A68(ctx, base);
     return;
   }
   const auto now = Clock::now();
   for(uint32_t i=0;i<16;i++) if(!std::isfinite(LoadF(base,matrix+i*4))) {
-    g_active.store(false);Apply(base,false);Notice("PHOTO MODE CAMERA IS UNAVAILABLE");__imp__sub_821B5A68(ctx,base);return;
+    g_active.store(false);Apply(base,false);Notice(tabletennis::l10n::T("PHOTO MODE CAMERA IS UNAVAILABLE"));__imp__sub_821B5A68(ctx,base);return;
   }
   if (!g_camera_ready) {
     // Start from the game's camera (the producer hook only takes over once this is set).

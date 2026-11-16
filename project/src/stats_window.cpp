@@ -1,3 +1,4 @@
+#include "localization.h"
 // stats_window.cpp - Frame-time overlay drawn in its own window
 
 #include "stats_window.h"
@@ -50,7 +51,9 @@ COLORREF DeviationColor(float ms) {
 
 void Text(HDC dc, int x, int y, COLORREF color, const char* text) {
   SetTextColor(dc, color);
-  TextOutA(dc, x, y, text, int(std::strlen(text)));
+  const int length=MultiByteToWideChar(CP_UTF8,0,text,-1,nullptr,0);
+  if(length>0) {std::wstring wide(length,L'\0');MultiByteToWideChar(CP_UTF8,0,text,-1,wide.data(),length);
+    TextOutW(dc,x,y,wide.data(),length-1);}
 }
 
 void Line(HDC dc, int x0, int y0, int x1, int y1, COLORREF color, int width = 1) {
@@ -77,10 +80,10 @@ void Paint(HDC dc) {
   char line[160];
   std::snprintf(line, sizeof(line), "FPS %5.1f", stats.game.fps);
   Text(dc, 10, 6, FpsColor(stats.game.fps), line);
-  std::snprintf(line, sizeof(line), "game   avg %5.2f  1%% %5.2f  worst %6.2f ms",
+  std::snprintf(line, sizeof(line), tabletennis::l10n::T("game   avg %5.2f  1%% %5.2f  worst %6.2f ms"),
                 stats.game.avg_ms, stats.game.p99_ms, stats.game.max_ms);
   Text(dc, 100, 6, RGB(200, 205, 215), line);
-  std::snprintf(line, sizeof(line), "display avg %5.2f  1%% %5.2f  worst %6.2f ms",
+  std::snprintf(line, sizeof(line), tabletennis::l10n::T("display avg %5.2f  1%% %5.2f  worst %6.2f ms"),
                 stats.present.avg_ms, stats.present.p99_ms, stats.present.max_ms);
   Text(dc, 92, 24, RGB(150, 155, 170), line);
 
@@ -131,11 +134,11 @@ void Paint(HDC dc) {
       }
     }
     if (worst > kMaxMs) {
-      std::snprintf(line, sizeof(line), "spike %.1f ms", worst);
+      std::snprintf(line, sizeof(line), tabletennis::l10n::T("spike %.1f ms"), worst);
       Text(dc, gx0 + 6, gy0 + 4, RGB(255, 110, 110), line);
     }
   }
-  std::snprintf(line, sizeof(line), "game frame time, last %zu frames   green = 16.7 +/- 2 ms",
+  std::snprintf(line, sizeof(line), tabletennis::l10n::T("game frame time, last %zu frames   green = 16.7 +/- 2 ms"),
                 count);
   Text(dc, 10, kHeight - 21, RGB(120, 125, 140), line);
 

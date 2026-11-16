@@ -4,9 +4,17 @@
 #include "settings_store.h"
 #include "screen_layout.h"
 #include "game_language.h"
+#include "localization.h"
 #include <cassert>
 #include <cmath>
 int main() {
+  for(auto code:{"en","fr","de","es","it"}) {
+    tabletennis::l10n::SetLanguage(code);
+    assert(std::string_view(tabletennis::l10n::T("PC SETTINGS"))==(std::string_view(code)=="en"?"PC SETTINGS":std::string_view(code)=="fr"?"OPTIONS PC":std::string_view(code)=="de"?"PC-OPTIONEN":std::string_view(code)=="es"?"OPCIONES PC":"OPZIONI PC"));
+    assert(std::string_view(tabletennis::l10n::T("unknown_key"))=="unknown_key");
+  }
+  tabletennis::l10n::SetLanguage("invalid");
+  assert(std::string_view(tabletennis::l10n::T("PC SETTINGS"))=="PC SETTINGS");
   using tabletennis::language::XboxId;
   static_assert(XboxId("en")==1 && XboxId("fr")==4 && XboxId("de")==3);
   static_assert(XboxId("es")==5 && XboxId("it")==6);

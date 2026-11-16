@@ -15,6 +15,8 @@ FIXED_FILES = {
     'project/updater/README.md', 'project/updater/release-public-key.xml', 'project/updater/update_backend.py',
     'project/tools/build_updater.py', 'project/tools/sign_update.ps1', 'project/tools/prepare_update.py',
     'project/cmake/rexglue.cmake', 'project/launcher/Launcher.cs', 'project/launcher/HostSession.cs', 'project/launcher/GatewayLeaseRouter.cs',
+    'project/localization.json', 'project/tools/generate_localization.py',
+    'project/src/localization.h', 'project/src/localization_data.inc', 'tests/test_localization.py',
     'project/src/game_language.h', 'project/src/main.cpp', 'project/src/tabletennis_app.h', 'project/src/offline_menu_device.h',
     'project/src/intro_skip.cpp', 'project/src/intro_skip.h',
     'project/src/frame_pacer.cpp', 'project/src/frame_pacer.h',

@@ -1,3 +1,4 @@
+#include "localization.h"
 // tabletennis_app.h - ReXGlue application configuration for Rockstar Games presents Table Tennis
 
 #pragma once
@@ -71,7 +72,7 @@ class StartupDialog : public rex::ui::ImGuiDialog {
       draw->AddRectFilled(viewport->Pos,
           ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
           IM_COL32(0, 0, 0, 255));
-      const char* message = "LOADING MAIN MENU...";
+      const char* message = tabletennis::l10n::T("LOADING MAIN MENU...");
       auto* font = loading_font_ ? loading_font_ : ImGui::GetFont();
       // Use the baked loading face size, independent of the smaller overlay font.
       const float font_size = loading_font_ ? loading_font_->LegacySize
@@ -287,6 +288,7 @@ class TabletennisApp : public rex::ReXApp {
     }
 
     const auto language=rex::cvar::GetFlagByName("game_language");
+    tabletennis::l10n::SetLanguage(language);
     const auto language_id=tabletennis::language::XboxId(language);
     rex::cvar::SetFlagByName("user_language",std::to_string(language_id));
     REXLOG_INFO("Game language: {} (Xbox system language {})",language,language_id);
@@ -343,6 +345,13 @@ class TabletennisApp : public rex::ReXApp {
       GetModuleFileNameW(NULL, exe_path_buf, MAX_PATH);
       std::filesystem::path exe_dir = std::filesystem::path(exe_path_buf).parent_path();
       std::filesystem::path flash_override = exe_dir / "assets" / "resource" / "flash";
+      const auto menu_language=rex::cvar::GetFlagByName("game_language");
+      if(menu_language!="en") {
+        const auto localized=flash_override/menu_language;
+        if(!std::filesystem::exists(localized/"flash.rpf"))
+          throw std::runtime_error("Menu language files are missing. Rebuild this test installation with its matching setup tools.");
+        flash_override=localized;
+      }
       if (std::filesystem::exists(flash_override / "flash.rpf")) {
         if (auto* root = vfs->ResolvePath("game:")) {
           auto dev = std::make_unique<OfflineMenuDevice>(flash_override, root->device());
@@ -410,7 +419,7 @@ class TabletennisApp : public rex::ReXApp {
         tabletennis::stats_window::Show(window()->GetNativeWindowHandle());
       }
       REXLOG_INFO("FPS overlay toggled via F10: {}",
-                  tabletennis::stats_window::IsVisible() ? "ON" : "OFF");
+                  tabletennis::stats_window::IsVisible() ? tabletennis::l10n::T("ON") : tabletennis::l10n::T("OFF"));
     });
 
     // Hotkey ESC quits game cleanly to Windows
