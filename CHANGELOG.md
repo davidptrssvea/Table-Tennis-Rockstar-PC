@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.6.0 - 2026-11-16 - Five-language Windows experience
+
+- Add English, French, German, Spanish and Italian language selection in the
+  launcher, using the original supported retail disc's localized game text.
+- Translate the launcher, PC Settings, Photo Mode help, achievements interface,
+  loading messages, update notices and added menu entries. Switch launcher
+  language immediately and apply game language on its next start.
+- Add the same language choices to the installer and make the updater follow
+  the installation's saved selection. Preserve graphics settings, paths and saves.
+- Generate localized menu archives locally from the verified ISO. Public assets
+  contain no ISO, game executable, extracted game data or generated guest code.
+- Include Latin Extended characters, safe UTF-8 text truncation and translated
+  help layout. Retain original technical logs and publisher release notes.
+- Retain the matched v1.5.3 engine and installer fixes. Gameplay remains paced
+  at 60 FPS; the separate experimental high-refresh work is not included.
+
 ## v1.5.3 - 2026-11-05 - Existing Build Tools component repair
 
 - Detect an existing Visual Studio Build Tools 2022 instance without requiring
